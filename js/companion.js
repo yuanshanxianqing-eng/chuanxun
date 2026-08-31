@@ -292,7 +292,7 @@
             card.className = 'settings-card hub-card';
             card.dataset.companionState = item.id;
             card.dataset.companionCustom = 'true';
-            card.innerHTML = `<i class="fas ${item.icon || 'fa-star'}"></i><span></span><small class="hub-card-state ready">可使用</small>`;
+            card.innerHTML = `<i class="fas ${item.icon || 'fa-star'}"></i><span></span>`;
             card.querySelector('span').textContent = item.name;
             grid.appendChild(card);
         });
@@ -356,6 +356,7 @@
             companionStateId: stateId, companionStateName: info.label, companionMinutes: minutes,
             companionDurationLabel: durationLabel(minutes), companionStatus: 'pending'
         });
+        window.EnhancementUI?.playProfile(`invite_${stateId}`);
         const wait = randomReplyDelay(2800);
         setTimeout(() => {
             outgoingPending = false;
@@ -376,6 +377,7 @@
             companionStateId: info.id, companionStateName: info.label, companionMinutes: minutes,
             companionDurationLabel: durationLabel(minutes), companionStatus: 'pending'
         });
+        window.EnhancementUI?.playProfile(`invite_${info.id}`);
         bridge().playMessageSound?.();
         if (force) notify(`${getNames().partner}发来了一张陪伴邀约`);
     }
@@ -724,6 +726,16 @@
     function leaveRoom() { if (!session) return; if (confirm('要提前结束这次陪伴并返回主聊天吗？')) finishSession(); }
     function finishSession() {
         if (!session) return;
+        const endedSession = session;
+        const durationSeconds = Math.max(1, Math.round((Date.now() - endedSession.start) / 1000));
+        if (typeof window.addCompanionDiaryEntry === 'function') {
+            window.addCompanionDiaryEntry({
+                id: Date.now(),
+                mode: endedSession.current.me || 'work',
+                duration: durationSeconds,
+                initiator: endedSession.initiator === 'partner' ? 'partner' : 'user'
+            });
+        }
         clearInterval(countdownTimer); clearInterval(rarePartnerTimer); stopMusic();
         session = null;
         const bubbles = byId('cp-live-bubbles'); if (bubbles) bubbles.innerHTML = '';

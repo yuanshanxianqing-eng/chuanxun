@@ -564,6 +564,13 @@ function deduplicateContentArray(arr, baseSystemArray = []) {
         const playSound = (type) => {
             if (!settings.soundEnabled) return;
             try {
+                const profileMap = { send: 'my_send', message: 'partner_message', poke: 'my_poke' };
+                const profileKey = profileMap[type] || type;
+                const profile = settings.soundProfiles && settings.soundProfiles[profileKey];
+                if (profile && profile.preset && window.EnhancementUI) {
+                    window.EnhancementUI.playProfile(profileKey);
+                    return;
+                }
                 if (settings.customSoundUrl && settings.customSoundUrl.trim()) {
                     const audio = new Audio(settings.customSoundUrl.trim());
                     audio.volume = Math.min(1, Math.max(0, settings.soundVolume || 0.15));
@@ -1027,7 +1034,14 @@ autoSendInterval: 5,
         customSoundUrl: '',
         soundVolume: 0.15,
         bottomCollapseMode: false,
-        emojiMixEnabled: true
+        emojiMixEnabled: true,
+        voiceCardEnabled: true,
+        partnerRecallEnabled: true,
+        partnerHangupEnabled: true,
+        partnerRedpacketEnabled: true,
+        combineReplyCards: false,
+        quickPokes: [],
+        soundProfiles: {}
             };
         }
 
@@ -1823,6 +1837,14 @@ async function handleVoiceBubbleClick(msg) {
   if (typeof msg === 'undefined') return;
   if (voiceGenerating) return;
 
+  // 用户实录语音已经带有可播放的 data/blob URL，不经过 TTS 二次生成。
+  if (msg.voiceUrl || (msg.voice && msg.voice.url)) {
+    const source = msg.voiceUrl || msg.voice.url;
+    const recordedAudio = new Audio(source);
+    recordedAudio.play().catch(() => showNotification('语音播放失败', 'error'));
+    return;
+  }
+
   // 1. 检查内存缓存（如果已在本会话生成过，直接播放）
   if (_voiceAudioCache[msg.id]) {
     const cached = _voiceAudioCache[msg.id];
@@ -1903,9 +1925,6 @@ async function handleVoiceBubbleClick(msg) {
     // 注意：msg.voiceUrl 不再保存，因为 blob URL 跨会话无效。
     // 即使之前有冗余保存，这里也不赋值，让它保持为 null。
     // 这样刷新后 voiceUrl 永远是 null，触发重新生成。
-    if (msg.voiceUrl) {
-      msg.voiceUrl = null;      // 清除旧引用（可选）
-    }
     throttledSaveData();        // 保存（主要是保存 voiceDuration）
 
   } catch (error) {
@@ -1962,6 +1981,27 @@ async function handleVoiceBubbleClick(msg) {
                     systemMsgDiv.innerHTML = msg.text;
                     fragment.appendChild(systemMsgDiv);
                     lastSender = 'system';
+                    return;
+                }
+
+                if (msg.recalled) {
+                    const recalled = document.createElement('div');
+                    recalled.className = 'system-message recalled-message';
+                    recalled.textContent = `${msg.sender === 'user' ? '你' : (settings.partnerName || '梦角')}撤回了一条消息`;
+                    fragment.appendChild(recalled);
+                    lastSender = 'system';
+                    return;
+                }
+
+                if (msg.type === 'redpacket' && window.EnhancementUI) {
+                    fragment.appendChild(window.EnhancementUI.renderRedpacket(msg));
+                    lastSender = msg.sender;
+                    return;
+                }
+
+                if (msg.type === 'cinema-invite' && window.EnhancementUI) {
+                    fragment.appendChild(window.EnhancementUI.renderCinemaInvite(msg));
+                    lastSender = msg.sender;
                     return;
                 }
 
@@ -2331,7 +2371,9 @@ let metaHTML = '';
             container.style.opacity = '1';
             renderMessages(false);
             throttledSaveData();
+            return message;
         };
+        window.addMessage = addMessage;
 
         // 陪伴功能只通过这层桥梁复用主站已有的聊天数据、头像、字卡和回复频率。
         window.CompanionBridge = {
@@ -2726,6 +2768,13 @@ if (!isBatchMode && type === 'normal') {
         }
     }
 
+    if (settings.partnerRecallEnabled !== false && Math.random() < 0.025 && window.EnhancementUI) {
+        if (window.EnhancementUI.triggerPartnerRecall()) {
+            (function(){var el=document.getElementById('typing-indicator-wrapper');if(el)el.style.display='none';})();
+            return;
+        }
+    }
+
     // ──────────── 🔊 语音消息配置 ────────────
     // 这些常量需要和全局的 isTtsReady() 配合
     const VOICE_PREFIXES = [
@@ -2768,7 +2817,17 @@ if (!isBatchMode && type === 'normal') {
             });
 
             const replyPool = customReplies.filter(r => !disabledItems.has(r) && !disabledGroupItems.has(r));
-            const replyText = replyPool[Math.floor(Math.random() * replyPool.length)];
+            let replyText = replyPool[Math.floor(Math.random() * replyPool.length)];
+            // 参考版概率下调：开启后仅约 18% 的回复会拼接 2～3 张字卡。
+            if (settings.combineReplyCards && replyPool.length > 1 && Math.random() < 0.18) {
+                const parts = [replyText];
+                const count = Math.min(replyPool.length, Math.random() < 0.78 ? 2 : 3);
+                while (parts.length < count) {
+                    const next = replyPool[Math.floor(Math.random() * replyPool.length)];
+                    if (!parts.includes(next)) parts.push(next);
+                }
+                replyText = parts.join(Math.random() < 0.5 ? '，' : '……');
+            }
 
             const shouldSendSticker = stickerLibrary && stickerLibrary.length > 0 && Math.random() < 0.2;
 
@@ -2789,7 +2848,7 @@ if (!isBatchMode && type === 'normal') {
             let isVoice = false;
             let voicePrefix = '';
             // 只有在 TTS 已配置时才考虑生成语音
-            if (typeof isTtsReady === 'function' && isTtsReady()) {
+            if (settings.voiceCardEnabled !== false && typeof isTtsReady === 'function' && isTtsReady()) {
                 // 每 5 条里随机 0~1 条 ≈ 20% 概率
                 if (Math.random() < 0.2) {
                     isVoice = true;
@@ -8569,6 +8628,7 @@ window.scrollToMessage = function(msgId) {
         incomingTimer:   null,
         connectingTimer: null,
         randomCallTimer: null,
+        partnerHangupTimer: null,
         isPartnerCall:   false,
         ringtoneAudio:   null,      // 新增：提示音 Audio 对象
         soundEnabled:    true,      // 新增：音效开关（与全局设置同步）
@@ -9216,17 +9276,27 @@ html:not([data-theme="dark"])[data-color-theme="black-white"] .message-sent{
                 if (conn) conn.classList.remove('visible');
                 if (body) body.style.display = '';
                 tick();
+                clearTimeout(S.partnerHangupTimer);
+                if (settings.partnerHangupEnabled !== false && Math.random() < 0.35) {
+                    S.partnerHangupTimer = setTimeout(() => {
+                        if (!S.active || !S.startTime) return;
+                        const who = getName();
+                        endCall(true);
+                        sendCallEvent('fa-phone-slash', `${who}主动挂断了通话`, null);
+                        if (typeof showNotification === 'function') showNotification(`${who}主动结束了通话`, 'info', 3000);
+                    }, 90000 + Math.random() * 390000);
+                }
             }, 1400 + Math.random() * 1400);
         }
     }
 
-    function endCall() {
+    function endCall(byPartner = false) {
         if (!S.active) return;
         const dur = S.elapsed;
         S.active = false; S.startTime = null;
         stopRingtone(); // 挂断时停止提示音
         cancelAnimationFrame(S.timerRAF);
-        clearTimeout(S.connectingTimer); clearTimeout(S.incomingTimer);
+        clearTimeout(S.connectingTimer); clearTimeout(S.incomingTimer); clearTimeout(S.partnerHangupTimer);
 
         ['call-window','call-mini-pill','call-incoming-overlay'].forEach(id => {
             const e = document.getElementById(id);
@@ -9242,7 +9312,7 @@ html:not([data-theme="dark"])[data-color-theme="black-white"] .message-sent{
 
         localStorage.setItem(KEY_POS,  JSON.stringify(S.pos));
         localStorage.setItem(KEY_SIZE, JSON.stringify(S.size));
-        sendCallMsg(dur);
+        if (!byPartner) sendCallMsg(dur);
         if (typeof showNotification === 'function' && dur > 1500)
             showNotification(`通话结束 · ${fmt(dur)}`, 'info', 3000);
         else if (typeof showNotification === 'function' && dur <= 1500 && dur > 0)
@@ -9251,6 +9321,7 @@ html:not([data-theme="dark"])[data-color-theme="black-white"] .message-sent{
 
     function showIncomingCall() {
         if (!S.enabled || S.active) return;
+        if (window.EnhancementUI) window.EnhancementUI.playProfile('invite_videocall');
         const ov = document.getElementById('call-incoming-overlay');
         if (!ov) return;
         fillAv('call-inc-avatar'); fillNm('call-inc-name');
@@ -9436,7 +9507,7 @@ html:not([data-theme="dark"])[data-color-theme="black-white"] .message-sent{
             clearTimeout(S.incomingTimer); startCall(true);
         });
 
-        document.getElementById('call-hangup-btn')?.addEventListener('click', endCall);
+        document.getElementById('call-hangup-btn')?.addEventListener('click', () => endCall());
         document.getElementById('call-mini-hangup')?.addEventListener('click', e => { e.stopPropagation(); endCall(); });
         document.getElementById('call-minimize-btn')?.addEventListener('click', minimizeWindow);
         document.getElementById('call-mini-pill')?.addEventListener('click', e => {
@@ -11736,7 +11807,9 @@ function showPokeTab() {
     area.style.flexDirection = 'column';
     area.style.gap = '8px';
     
-    const quickPokes = customPokes.slice(0, 6);
+    const quickPokes = window.PokeLibraryFeature
+        ? window.PokeLibraryFeature.getQuick(customPokes)
+        : customPokes.slice(0, 6);
     
     quickPokes.forEach(pokeText => {
         const btn = document.createElement('button');
@@ -11779,6 +11852,15 @@ function showPokeTab() {
         area.appendChild(btn);
     });
     
+    const libraryBtn = document.createElement('button');
+    libraryBtn.className = 'poke-library-entry';
+    libraryBtn.innerHTML = '<i class="fas fa-box-archive"></i><span>我的拍一拍库</span><i class="fas fa-chevron-right"></i>';
+    libraryBtn.onclick = () => {
+        document.getElementById('user-sticker-picker').classList.remove('active');
+        if (window.PokeLibraryFeature) window.PokeLibraryFeature.open();
+    };
+    area.appendChild(libraryBtn);
+
     const customBtn = document.createElement('button');
     customBtn.innerHTML = '<i class="fas fa-edit"></i> 自定义拍一拍';
     customBtn.style.cssText = `

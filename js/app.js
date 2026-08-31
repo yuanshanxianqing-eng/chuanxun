@@ -1980,6 +1980,56 @@ async function handleVoiceBubbleClick(msg) {
                     return;
 
                 }
+                if (msg.type === 'companion-invite') {
+                    const inviteWrap = document.createElement('div');
+                    inviteWrap.className = `companion-message-wrap ${msg.sender === 'user' ? 'sent' : 'received'}`;
+                    inviteWrap.dataset.id = msg.id;
+
+                    const card = document.createElement('button');
+                    card.className = `companion-chat-card ${msg.companionStatus || 'pending'}`;
+                    card.type = 'button';
+
+                    const head = document.createElement('div');
+                    head.className = 'companion-chat-card-head';
+                    const kicker = document.createElement('span');
+                    kicker.className = 'companion-chat-card-kicker';
+                    kicker.textContent = 'STAY BESIDE ME';
+                    const title = document.createElement('strong');
+                    title.textContent = '陪伴邀约';
+                    const detail = document.createElement('span');
+                    detail.className = 'companion-chat-card-detail';
+                    detail.textContent = `${msg.companionStateName || '陪伴'} · ${msg.companionDurationLabel || ''}`;
+                    const seal = document.createElement('span');
+                    seal.className = 'companion-chat-card-seal';
+                    seal.textContent = '邀';
+                    head.append(kicker, title, detail, seal);
+
+                    const foot = document.createElement('div');
+                    foot.className = 'companion-chat-card-foot';
+                    const ownState = document.createElement('span');
+                    ownState.textContent = msg.sender === 'user'
+                        ? `我的状态 · ${msg.companionStateName || ''}`
+                        : `${settings.partnerName || '梦角'}的状态 · ${msg.companionStateName || ''}`;
+                    const status = document.createElement('b');
+                    const labels = {
+                        pending: msg.sender === 'user' ? '等待回应' : '点击查看',
+                        accepted: '已接受',
+                        rejected: '未接受',
+                        expired: '已结束'
+                    };
+                    status.textContent = labels[msg.companionStatus || 'pending'] || '查看邀约';
+                    foot.append(ownState, status);
+                    card.append(head, foot);
+                    card.addEventListener('click', () => {
+                        if (window.companionFeature && typeof window.companionFeature.handleInviteCard === 'function') {
+                            window.companionFeature.handleInviteCard(msg.id);
+                        }
+                    });
+                    inviteWrap.appendChild(card);
+                    fragment.appendChild(inviteWrap);
+                    lastSender = 'companion-invite';
+                    return;
+                }
 // ========== 礼物消息（卡片形式，无气泡）==========
 if (msg.type === 'gift') {
     const giftWrapper = document.createElement('div');
@@ -2281,6 +2331,71 @@ let metaHTML = '';
             container.style.opacity = '1';
             renderMessages(false);
             throttledSaveData();
+        };
+
+        // 陪伴功能只通过这层桥梁复用主站已有的聊天数据、头像、字卡和回复频率。
+        window.CompanionBridge = {
+            addMainMessage(message) {
+                addMessage(Object.assign({
+                    id: Date.now() + Math.random(),
+                    timestamp: new Date(),
+                    status: 'received',
+                    favorited: false,
+                    note: null
+                }, message));
+            },
+            updateMainMessage(id, patch) {
+                const target = messages.find(item => String(item.id) === String(id));
+                if (!target) return false;
+                Object.assign(target, patch || {});
+                renderMessages(false);
+                throttledSaveData();
+                return true;
+            },
+            getMessage(id) {
+                return messages.find(item => String(item.id) === String(id)) || null;
+            },
+            getSettings() {
+                return settings || {};
+            },
+            getNames() {
+                return { me: settings.myName || '我', partner: settings.partnerName || '梦角' };
+            },
+            getAvatar(person) {
+                const holder = person === 'me' ? DOMElements.me.avatar : DOMElements.partner.avatar;
+                const image = holder && holder.querySelector('img');
+                return image ? image.src : '';
+            },
+            getReplyDelay() {
+                return {
+                    min: Number(settings.replyDelayMin) || 3000,
+                    max: Number(settings.replyDelayMax) || 7000
+                };
+            },
+            getRandomReply() {
+                let disabledItems = new Set();
+                try {
+                    const raw = localStorage.getItem('disabledReplyItems');
+                    if (raw) disabledItems = new Set(JSON.parse(raw));
+                } catch (error) {}
+                const disabledGroupItems = new Set();
+                (window.customReplyGroups || []).forEach(group => {
+                    if (group.disabled && Array.isArray(group.items)) {
+                        group.items.forEach(item => disabledGroupItems.add(item));
+                    }
+                });
+                const pool = (customReplies || []).filter(item => !disabledItems.has(item) && !disabledGroupItems.has(item));
+                return pool.length ? pool[Math.floor(Math.random() * pool.length)] : '';
+            },
+            storageKey(name) {
+                return getStorageKey(name);
+            },
+            notify(text, type, duration) {
+                showNotification(text, type || 'info', duration || 2400);
+            },
+            playMessageSound() {
+                playSound('message');
+            }
         };
 
         window._addCallEvent = (icon, label, detail) => {
@@ -2759,6 +2874,9 @@ if (!isBatchMode && type === 'normal') {
                         }
                     }
                 })();
+                if (window.companionFeature && typeof window.companionFeature.afterPartnerReply === 'function') {
+                    setTimeout(() => window.companionFeature.afterPartnerReply(), 320);
+                }
             }
         }, delay);
     }

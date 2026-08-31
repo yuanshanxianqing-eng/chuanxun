@@ -44,53 +44,15 @@
         document.body.appendChild(host);
     }
 
-    function injectQuestionnaireModal() {
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.id = 'ask-batch-modal';
-        modal.innerHTML = `<div class="modal-content ask-batch-modal-content">
-            <div class="modal-title ask-batch-title"><i class="fas fa-circle-question"></i><span>问问你</span><small>可以一次放入多个问题</small></div>
-            <div class="ask-batch-list" id="ask-batch-list"></div>
-            <button type="button" class="ask-add-question" id="ask-add-question"><i class="fas fa-plus"></i> 添加一个问题</button>
-            <div class="modal-buttons"><button class="modal-btn modal-btn-secondary" id="ask-batch-cancel">取消</button><button class="modal-btn modal-btn-primary" id="ask-batch-send">发送全部问题</button></div>
-        </div>`;
-        document.body.appendChild(modal);
-    }
-
     function bindMenus() {
-        const moreButton = $('more-btn'), morePanel = $('more-panel');
-        moreButton && morePanel && moreButton.addEventListener('click', e => { e.stopPropagation(); const opening = !morePanel.classList.contains('open'); document.querySelectorAll('.composer-mini-menu.open').forEach(x => x.classList.remove('open')); morePanel.classList.toggle('open', opening); });
+        const pairs = [[$('more-btn'), $('more-panel')], [$('conversation-action-btn'), $('conversation-action-panel')]];
+        pairs.forEach(([button, panel]) => button && panel && button.addEventListener('click', e => { e.stopPropagation(); const opening = !panel.classList.contains('open'); document.querySelectorAll('.composer-mini-menu.open').forEach(x => x.classList.remove('open')); panel.classList.toggle('open', opening); }));
         document.addEventListener('click', e => { if (!e.target.closest('.composer-popover-anchor')) document.querySelectorAll('.composer-mini-menu.open').forEach(x => x.classList.remove('open')); });
         $('continue-choice-btn')?.addEventListener('click', () => { $('continue-btn')?.click(); $('conversation-action-panel')?.classList.remove('open'); });
         $('batch-choice-btn')?.addEventListener('click', () => { $('batch-btn')?.click(); $('conversation-action-panel')?.classList.remove('open'); });
-        const input = $('message-input'), action = $('conversation-action-btn'), actionPanel = $('conversation-action-panel');
-        const syncAction = () => {
-            const hasText = !!input?.value.trim();
-            action?.classList.toggle('composer-send-state', hasText);
-            if (action) {
-                action.title = hasText ? '发送消息' : '继续说／有很多话想说';
-                action.innerHTML = hasText ? '<i class="fas fa-paper-plane"></i>' : '<i class="fas fa-comment-dots"></i>';
-            }
-            if (hasText) actionPanel?.classList.remove('open');
-        };
-        input?.addEventListener('input', syncAction);
-        action?.addEventListener('click', e => {
-            e.stopPropagation();
-            if (input?.value.trim()) {
-                $('send-btn')?.click();
-                setTimeout(syncAction, 0);
-                return;
-            }
-            const opening = !actionPanel?.classList.contains('open');
-            document.querySelectorAll('.composer-mini-menu.open').forEach(x => x.classList.remove('open'));
-            actionPanel?.classList.toggle('open', opening);
-        });
-        syncAction();
-        $('videocall-btn')?.addEventListener('click', () => window.callFeature?.startCall?.(false));
         $('more-image-btn')?.addEventListener('click', () => $('image-input')?.click());
         $('more-redpacket-btn')?.addEventListener('click', () => window.TransferFeature?.open());
         $('more-redpacket-record-btn')?.addEventListener('click', () => window.TransferFeature?.openRecord());
-        $('more-questionnaire-btn')?.addEventListener('click', () => { $('more-panel')?.classList.remove('open'); window.QuestionnaireFeature?.open(); });
         $('cinema-function')?.addEventListener('click', () => { if (typeof hideModal === 'function') hideModal($('invite-modal')); window.openEntertainment?.(); });
     }
 
@@ -138,61 +100,6 @@
         $('poke-library-close')?.addEventListener('click',()=>hideModal($('poke-library-modal')));
     }
 
-    let askDrafts = [];
-    const freshAsk = () => ({ id: Date.now() + Math.random(), question: '', mode: 'single', options: ['', ''] });
-    function renderAskDrafts() {
-        const root = $('ask-batch-list'); if (!root) return;
-        root.innerHTML = askDrafts.map((item, index) => `<section class="ask-editor-card" data-ask-index="${index}">
-            <div class="ask-editor-head"><span>问题 ${index + 1}</span>${askDrafts.length > 1 ? '<button type="button" data-ask-remove title="删除问题"><i class="fas fa-trash"></i></button>' : ''}</div>
-            <textarea data-ask-question placeholder="输入你想问的问题…">${esc(item.question)}</textarea>
-            <div class="ask-mode-row"><span>回答方式</span><div><button type="button" data-ask-mode="single" class="${item.mode === 'single' ? 'active' : ''}">单选</button><button type="button" data-ask-mode="multiple" class="${item.mode === 'multiple' ? 'active' : ''}">多选</button></div></div>
-            <div class="ask-option-list">${item.options.map((option, optionIndex) => `<div class="ask-option-row"><span>${String.fromCharCode(65 + optionIndex)}</span><input data-ask-option="${optionIndex}" value="${esc(option)}" placeholder="输入选项内容…"><button type="button" data-ask-option-remove="${optionIndex}" ${item.options.length <= 2 ? 'disabled' : ''}><i class="fas fa-xmark"></i></button></div>`).join('')}</div>
-            <button type="button" class="ask-option-add" data-ask-option-add><i class="fas fa-plus"></i> 添加选项</button>
-        </section>`).join('');
-        root.querySelectorAll('.ask-editor-card').forEach(card => {
-            const i = Number(card.dataset.askIndex), item = askDrafts[i];
-            card.querySelector('[data-ask-question]').oninput = e => item.question = e.target.value;
-            card.querySelectorAll('[data-ask-mode]').forEach(btn => btn.onclick = () => { item.mode = btn.dataset.askMode; renderAskDrafts(); });
-            card.querySelectorAll('[data-ask-option]').forEach(input => input.oninput = e => item.options[Number(input.dataset.askOption)] = e.target.value);
-            card.querySelectorAll('[data-ask-option-remove]').forEach(btn => btn.onclick = () => { if (item.options.length <= 2) return; item.options.splice(Number(btn.dataset.askOptionRemove), 1); renderAskDrafts(); });
-            card.querySelector('[data-ask-option-add]').onclick = () => { if (item.options.length >= 10) return notify('每个问题最多 10 个选项', 'info'); item.options.push(''); renderAskDrafts(); };
-            card.querySelector('[data-ask-remove]')?.addEventListener('click', () => { askDrafts.splice(i, 1); renderAskDrafts(); });
-        });
-    }
-    function scheduleQuestionnaireAnswer(questions) {
-        const min = Number(settings.replyDelayMin) || 3000;
-        const max = Math.max(min, Number(settings.replyDelayMax) || 7000);
-        setTimeout(() => {
-            const answered = questions.map(item => {
-                const shuffled = item.options.slice().sort(() => Math.random() - 0.5);
-                const count = item.mode === 'multiple' ? Math.max(1, Math.min(shuffled.length, 1 + Math.floor(Math.random() * Math.min(3, shuffled.length)))) : 1;
-                return { ...item, answer: shuffled.slice(0, count) };
-            });
-            addMessage({ id: Date.now() + Math.random(), sender: settings.partnerName || '梦角', text: '回答了你的问卷', questions: answered, timestamp: new Date(), status: 'received', type: 'question-batch' });
-            messages.forEach(message => { if (message.sender === 'user' && message.status !== 'read') message.status = 'read'; });
-            save();
-            if (typeof window._sendPartnerNotification === 'function') window._sendPartnerNotification(settings.partnerName || '梦角', `回答了你的 ${questions.length} 个问题`);
-        }, min + Math.random() * (max - min));
-    }
-    window.QuestionnaireFeature = {
-        open() { askDrafts = [freshAsk()]; renderAskDrafts(); showModal($('ask-batch-modal')); },
-        add() { if (askDrafts.length >= 10) return notify('一次最多询问 10 个问题', 'info'); askDrafts.push(freshAsk()); renderAskDrafts(); },
-        send() {
-            const questions = askDrafts.map(item => ({ question: item.question.trim(), mode: item.mode, options: item.options.map(v => v.trim()).filter(Boolean) }));
-            if (questions.some(item => !item.question)) return notify('请把每个问题填写完整', 'warning');
-            if (questions.some(item => item.options.length < 2)) return notify('每个问题至少需要 2 个选项', 'warning');
-            hideModal($('ask-batch-modal'));
-            addMessage({ id: Date.now() + Math.random(), sender: 'user', text: `向${settings.partnerName || '梦角'}提出了 ${questions.length} 个问题`, questions, timestamp: new Date(), status: 'sent', type: 'question-batch' });
-            scheduleQuestionnaireAnswer(questions);
-            notify(`已发送 ${questions.length} 个问题`, 'success');
-        }
-    };
-    function bindQuestionnaire() {
-        $('ask-add-question')?.addEventListener('click', () => window.QuestionnaireFeature.add());
-        $('ask-batch-cancel')?.addEventListener('click', () => hideModal($('ask-batch-modal')));
-        $('ask-batch-send')?.addEventListener('click', () => window.QuestionnaireFeature.send());
-    }
-
     function avatarHtml(isUser) {
         const el = isUser ? document.getElementById('user-avatar') : document.getElementById('partner-avatar');
         const img = el?.querySelector('img'); return img ? `<img src="${esc(img.src)}" alt="">` : '<i class="fas fa-user"></i>';
@@ -208,25 +115,12 @@
             let actions=d.state==='countered'?'<div class="cinema-invite-card-actions"><button data-invite-action="reschedule">换时间</button><button data-invite-action="changemovie">换片</button><button data-invite-action="decline">拒绝</button><button class="primary" data-invite-action="accept">同意</button></div>':`<div class="cinema-invite-card-status">${d.state==='accepted'?'约定成功':d.state==='declined'?'下次吧':'等待回复中…'}</div>`;
             wrap.innerHTML=`<div class="message-avatar">${avatarHtml(own)}</div><div class="message-content-wrapper"><div class="cinema-invite-card" data-invite-id="${esc(d.negoId||'')}"><div class="cinema-invite-card-banner">CINEMA</div><strong>${esc(d.movieTitle||'电影邀约')}</strong><span>${esc((d.dateStr||'')+' '+(d.timeStr||''))}</span>${actions}</div></div>`;return wrap;
         },
-        renderQuestionnaire(msg) {
-            const own = msg.sender === 'user', wrap = document.createElement('div');
-            wrap.className = `message-wrapper ${own ? 'sent' : 'received'} question-batch-wrap`;
-            wrap.dataset.id = msg.id;
-            const questions = Array.isArray(msg.questions) ? msg.questions : [];
-            const cards = questions.map((item, index) => {
-                const answers = Array.isArray(item.answer) ? item.answer : [];
-                const options = (item.options || []).map((option, optionIndex) => `<div class="question-option ${answers.includes(option) ? 'chosen' : ''}"><span class="question-opt-tag">${String.fromCharCode(65 + optionIndex)}</span><span class="question-opt-text">${esc(option)}</span>${answers.includes(option) ? '<span class="question-opt-check">✓</span>' : ''}</div>`).join('');
-                return `<section class="question-card ${answers.length ? 'question-card-answer' : ''}"><div class="question-card-q"><span class="question-card-icon">${answers.length ? '💌' : '🌸'}</span><span class="question-card-text">${esc(item.question)}</span><span class="question-mode-tag">${item.mode === 'multiple' ? '多选' : '单选'}</span></div><div class="question-card-sep"></div><div class="question-card-options">${options}</div>${answers.length ? `<div class="question-answer-line"><span class="question-answer-label">TA 的选择</span><span class="question-answer-val">${esc(answers.join('、'))}</span></div>` : ''}</section>`;
-            }).join('');
-            wrap.innerHTML = `<div class="message-avatar">${avatarHtml(own)}</div><div class="message-content-wrapper"><div class="question-batch-shell"><div class="question-batch-heading"><span>${own ? '问问你' : '我的回答'}</span><b>${questions.length} 题</b></div>${cards}</div></div>`;
-            return wrap;
-        },
         triggerPartnerRecall() { const candidate=[...messages].reverse().find(m=>m.sender!=='user'&&m.type!=='system'&&!m.recalled&&(m.text||m.image)); if(!candidate)return false;candidate.recalled=true;candidate.recalledAt=Date.now();renderMessages();save();return true; },
         playProfile(key) { const p=(settings.soundProfiles||{})[key]||{}, preset=p.preset||'default';if(preset==='mute')return;if(preset==='custom'&&p.url){const a=new Audio(p.url);a.volume=settings.soundVolume||.15;a.play().catch(()=>notify('音效链接无法播放','error'));return;}if(preset==='kakaotalk'){const a=new Audio('https://image.uglycat.cc/jl5xf9.mp3');a.volume=settings.soundVolume||.15;a.play().catch(()=>{});return;}const invite=key.startsWith('invite_')?`assets/audio/${key}.mp3`:'';if(invite&&preset==='default'){const a=new Audio(invite);a.volume=settings.soundVolume||.15;a.play().catch(()=>{});return;}try{const c=new (window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);const tones={low:360,soft:620,warm:520,dark:290,haze:440,default:760};o.frequency.value=tones[preset]||760;o.type=preset==='dark'?'triangle':'sine';g.gain.value=Math.min(.3,settings.soundVolume||.15);o.start();g.gain.exponentialRampToValueAtTime(.0001,c.currentTime+.16);o.stop(c.currentTime+.17);}catch(e){} }
     };
 
-    injectFeatureModals(); injectQuestionnaireModal();
-    bindMenus(); bindPokeLibrary(); bindQuestionnaire();
+    injectFeatureModals();
+    bindMenus(); bindPokeLibrary();
     function bootSettings(attempt) {
         if ((!settings || !settings.partnerName) && attempt < 20) {
             setTimeout(() => bootSettings(attempt + 1), 120);

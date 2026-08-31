@@ -2005,12 +2005,6 @@ async function handleVoiceBubbleClick(msg) {
                     return;
                 }
 
-                if (msg.type === 'question-batch' && window.EnhancementUI) {
-                    fragment.appendChild(window.EnhancementUI.renderQuestionnaire(msg));
-                    lastSender = msg.sender;
-                    return;
-                }
-
                 if (msg.type === 'call-event') {
                     const callEvDiv = document.createElement('div');
                     callEvDiv.className = 'call-event-message';
@@ -18788,10 +18782,6 @@ function initDQListeners() {
         dqEntry.addEventListener('click', async () => {
             if (DOMElements.advancedModal && DOMElements.advancedModal.modal) {
                 hideModal(DOMElements.advancedModal.modal);
-            }
-            if (window.QuestionnaireFeature && typeof window.QuestionnaireFeature.open === 'function') {
-                window.QuestionnaireFeature.open();
-                return;
             }
             await loadDQData();
             renderDQList();

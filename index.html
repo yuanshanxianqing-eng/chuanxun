@@ -22,6 +22,9 @@
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/hubs.css">
     <link rel="stylesheet" href="css/companion.css">
+    <link rel="stylesheet" href="css/enhancements.css">
+    <link rel="stylesheet" href="css/companion-diary.css">
+    <link rel="stylesheet" href="css/cinema.css">
     <style id="css-live-preview-style"></style>
 </head>
 <body>
@@ -337,7 +340,16 @@
         </div>
         <div class="input-area">
     <button id="collapse-expand-btn" title="展开更多" style="display:none;width:36px;height:36px;border:none;border-radius:50%;cursor:pointer;background:rgba(var(--accent-color-rgb),0.12);color:var(--accent-color);font-size:14px;transition:all 0.25s;flex-shrink:0;align-items:center;justify-content:center;" onclick="window.toggleCollapsedExtras && window.toggleCollapsedExtras()"><i class="fas fa-chevron-up"></i></button>
-    <button class="attachment-btn input-btn collapse-hideable" id="attachment-btn" title="发送图片"><i class="fas fa-image"></i></button>
+    <button class="attachment-btn input-btn collapse-hideable" id="attachment-btn" title="发送图片" hidden><i class="fas fa-image"></i></button>
+    <div class="composer-popover-anchor collapse-hideable">
+        <button class="input-btn" id="more-btn" title="更多功能"><i class="fas fa-plus"></i></button>
+        <div class="composer-mini-menu more-panel" id="more-panel">
+            <button id="more-redpacket-btn"><i class="fas fa-envelope"></i><span>红包</span></button>
+            <button id="more-redpacket-record-btn"><i class="fas fa-clock-rotate-left"></i><span>红包记录</span></button>
+            <button id="dream-questionnaire-function"><i class="fas fa-clipboard-list"></i><span>问卷</span></button>
+            <button id="more-image-btn"><i class="fas fa-image"></i><span>图片</span></button>
+        </div>
+    </div>
     
     <button class="combo-btn input-btn collapse-hideable" id="combo-btn" title="表情 & 拍一拍">
         <i class="fas fa-laugh-beam"></i>
@@ -346,8 +358,16 @@
     <textarea class="message-input" id="message-input" placeholder="" rows="1"></textarea>
     
     <div class="input-buttons">
-    <button class="continue-btn input-btn" id="continue-btn" title="让对方继续说"><i class="fas fa-ellipsis-h"></i></button>
-        <button class="batch-btn input-btn collapse-hideable" id="batch-btn" title="批量发送模式"><i class="fas fa-layer-group"></i></button>
+        <div class="composer-popover-anchor collapse-hideable">
+            <button class="input-btn" id="conversation-action-btn" title="续说与批量发送"><i class="fas fa-comment-dots"></i></button>
+            <div class="composer-mini-menu action-panel" id="conversation-action-panel">
+                <button id="continue-choice-btn"><i class="fas fa-ellipsis-h"></i><span>让对方继续说</span></button>
+                <button id="batch-choice-btn"><i class="fas fa-layer-group"></i><span>我有很多话想说</span></button>
+            </div>
+        </div>
+        <button class="continue-btn input-btn" id="continue-btn" title="让对方继续说" hidden><i class="fas fa-ellipsis-h"></i></button>
+        <button class="batch-btn input-btn collapse-hideable" id="batch-btn" title="批量发送模式" hidden><i class="fas fa-layer-group"></i></button>
+        <button class="input-btn" id="voice-mic-btn" title="切换语音"><i class="fas fa-microphone"></i></button>
         <button class="send-btn input-btn" id="send-btn" title="发送消息"><i class="fas fa-paper-plane"></i></button>
         
         <div class="sticker-picker-popover" id="user-sticker-picker">
@@ -367,6 +387,10 @@
     <input type="file" id="image-input" class="file-input" accept="image/*">
     <input type="file" id="my-sticker-quick-upload" class="file-input" accept="image/*" multiple>
 </div>
+        <div class="voice-hold-wrap" id="voice-hold-wrap" hidden>
+            <button type="button" id="voice-hold-btn"><i class="fas fa-microphone"></i><span id="voice-hold-label">按住 说话</span></button>
+            <div id="voice-rec-hint">松开发送 · 上滑取消</div>
+        </div>
     </div>
 
 
@@ -676,8 +700,8 @@
                 <div class="settings-card hub-card" id="bookshelf-function">
                     <i class="fas fa-book"></i><span>书架</span><small class="hub-card-state ready">可使用</small>
                 </div>
-                <div class="settings-card hub-card hub-placeholder" data-coming-soon="电影">
-                    <i class="fas fa-film"></i><span>电影</span><small class="hub-card-state">筹备中</small>
+                <div class="settings-card hub-card" id="cinema-function">
+                    <i class="fas fa-film"></i><span>电影</span>
                 </div>
                 <div class="settings-card hub-card hub-placeholder" data-coming-soon="贴贴">
                     <i class="fas fa-hands-holding-heart"></i><span>贴贴</span><small class="hub-card-state">筹备中</small>
@@ -697,10 +721,10 @@
                 <button class="hub-close-btn" id="close-companion" title="关闭"><i class="fas fa-xmark"></i></button>
             </div>
             <div class="settings-grid hub-card-grid hub-card-grid-four" id="companion-state-grid">
-                <div class="settings-card hub-card" data-companion-state="work"><i class="fas fa-briefcase"></i><span>工作</span><small class="hub-card-state ready">可使用</small></div>
-                <div class="settings-card hub-card" data-companion-state="study"><i class="fas fa-book-open-reader"></i><span>学习</span><small class="hub-card-state ready">可使用</small></div>
-                <div class="settings-card hub-card" data-companion-state="exercise"><i class="fas fa-person-running"></i><span>运动</span><small class="hub-card-state ready">可使用</small></div>
-                <div class="settings-card hub-card" data-companion-state="sleep"><i class="fas fa-moon"></i><span>睡觉</span><small class="hub-card-state ready">可使用</small></div>
+                <div class="settings-card hub-card" data-companion-state="work"><i class="fas fa-briefcase"></i><span>工作</span></div>
+                <div class="settings-card hub-card" data-companion-state="study"><i class="fas fa-book-open-reader"></i><span>学习</span></div>
+                <div class="settings-card hub-card" data-companion-state="exercise"><i class="fas fa-person-running"></i><span>运动</span></div>
+                <div class="settings-card hub-card" data-companion-state="sleep"><i class="fas fa-moon"></i><span>睡觉</span></div>
             </div>
             <div class="hub-footer-actions">
                 <button class="modal-btn modal-btn-primary" id="companion-pre-settings">陪伴设置</button>
@@ -1185,6 +1209,18 @@
                             <span class="setting-pill-label">正在输入</span>
                             <div class="setting-pill-switch"><div class="setting-pill-knob"></div></div>
                         </div>
+                        <div class="setting-pill-row enhancement-toggle" id="voice-card-toggle" data-setting="voiceCardEnabled">
+                            <span class="setting-pill-icon"><i class="fas fa-wave-square"></i></span><span class="setting-pill-label">允许发送语音字卡</span><div class="setting-pill-switch"><div class="setting-pill-knob"></div></div>
+                        </div>
+                        <div class="setting-pill-row enhancement-toggle" id="partner-recall-toggle" data-setting="partnerRecallEnabled">
+                            <span class="setting-pill-icon"><i class="fas fa-rotate-left"></i></span><span class="setting-pill-label">梦角撤回消息</span><div class="setting-pill-switch"><div class="setting-pill-knob"></div></div>
+                        </div>
+                        <div class="setting-pill-row enhancement-toggle" id="partner-hangup-toggle" data-setting="partnerHangupEnabled">
+                            <span class="setting-pill-icon"><i class="fas fa-phone-slash"></i></span><span class="setting-pill-label">梦角主动挂断电话</span><div class="setting-pill-switch"><div class="setting-pill-knob"></div></div>
+                        </div>
+                        <div class="setting-pill-row enhancement-toggle" id="partner-redpacket-toggle" data-setting="partnerRedpacketEnabled">
+                            <span class="setting-pill-icon"><i class="fas fa-gift"></i></span><span class="setting-pill-label">梦角主动发送红包</span><div class="setting-pill-switch"><div class="setting-pill-knob"></div></div>
+                        </div>
                     </div>
 
                     <p class="cs-group-label" style="margin-top:4px;">时间戳</p>
@@ -1247,6 +1283,11 @@
                             <span class="setting-pill-label">表情混入消息 <span style="font-size:11px;color:var(--text-secondary);font-weight:400;">开启后表情与文字同条发送</span></span>
                             <div class="setting-pill-switch"><div class="setting-pill-knob"></div></div>
                         </div>
+                        <div class="setting-pill-row enhancement-toggle" id="combine-cards-toggle" data-setting="combineReplyCards">
+                            <span class="setting-pill-icon"><i class="fas fa-link"></i></span>
+                            <span class="setting-pill-label">回复拼接字卡 <span class="setting-pill-note">低概率拼接 2–3 张字卡</span></span>
+                            <div class="setting-pill-switch"><div class="setting-pill-knob"></div></div>
+                        </div>
                     </div>
 
                     <p class="cs-group-label" style="margin-top:4px;">通话功能</p>
@@ -1283,6 +1324,7 @@
                                     <button id="test-sound-btn" class="modal-btn modal-btn-secondary" style="padding:6px 10px;font-size:12px;white-space:nowrap;"><i class="fas fa-play"></i> 试听</button>
                                 </div>
                             </div>
+                            <div id="sound-matrix" class="sound-matrix"></div>
                         </div>
                     </div>
                     <p class="cs-group-label" style="margin-top:16px;">挂机保活音频</p>
@@ -1392,6 +1434,9 @@
                     </div>
                     <div class="settings-item" id="mood-function">
                         <i class="fas fa-calendar-day"></i><span>心晴手账</span>
+                    </div>
+                    <div class="settings-item" id="companion-diary-function">
+                        <i class="fas fa-book-open"></i><span>陪伴日记</span>
                     </div>
                 </div>
             </div>
@@ -2617,6 +2662,32 @@
 </div>
 
 <script src="js/journey.js"></script>
+
+<!-- 电影院沿用现有“邀约”入口，在当前框架内打开，不跳转到空间页 -->
+<section id="entertainment-page" aria-hidden="true">
+    <div class="cs-topbar" id="ent-topbar">
+        <button class="cs-icon-btn" type="button" onclick="closeEntertainment()"><i class="fas fa-chevron-left"></i></button>
+        <span class="cs-topbar-feed-title">电影院</span>
+        <button class="cs-icon-btn" type="button" style="visibility:hidden"><i class="fas fa-film"></i></button>
+    </div>
+    <div class="cs-content">
+        <div class="cs-panel cs-panel-active" id="cs-panel-cinema"></div>
+        <div class="cinema-archive-page" id="cinema-archive-page">
+            <div class="cinema-archive-tabs">
+                <button class="cs-icon-btn cinema-archive-back-btn" type="button" onclick="window._cinemaCloseArchive()"><i class="fas fa-chevron-left"></i></button>
+                <button class="cinema-archive-tab active" id="cinema-tab-history">影评</button>
+                <button class="cinema-archive-tab" id="cinema-tab-watchlist">心愿单</button>
+            </div>
+            <div class="cinema-archive-content" id="cinema-archive-content"><div class="cinema-archive-empty">暂无记录</div></div>
+        </div>
+    </div>
+</section>
+
+<script src="js/enhancements.js"></script>
+<script src="js/voice-recorder.js"></script>
+<script src="js/transfer.js"></script>
+<script src="js/companion-diary.js"></script>
+<script src="js/cinema.js"></script>
 <script src="js/hubs.js"></script>
 <script src="js/companion.js"></script>
 </body>

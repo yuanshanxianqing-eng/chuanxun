@@ -4,7 +4,7 @@
  * {
  *   id: 时间戳,
  *   ts: 开始时间戳（用于排序、日期计算）,
- *   mode: 'study' | 'work' | 'exercise' | 'sleep',
+ *   mode: 'study' | 'work' | 'exercise' | 'sleep' | 'distance',
  *   duration: 秒数,
  *   initiator: 'partner' | 'user',
  *   missed: true | undefined,   // 错过的邀请记录（超时未接）
@@ -35,7 +35,8 @@
         study:    { name: '学习', shortName: '学习', icon: 'fa-book-open',  sticker: '🌿' },
         work:     { name: '工作', shortName: '工作', icon: 'fa-briefcase',  sticker: '☕' },
         exercise: { name: '运动', shortName: '运动', icon: 'fa-running',    sticker: '☀️' },
-        sleep:    { name: '睡觉', shortName: '睡觉', icon: 'fa-moon',       sticker: '🌙' }
+        sleep:    { name: '睡觉', shortName: '睡觉', icon: 'fa-moon',       sticker: '🌙' },
+        distance: { name: '距离', shortName: '距离', icon: 'fa-location-dot', sticker: '✦' }
     };
 
     // ─── 存储 ───────────────────────────────────────
@@ -142,7 +143,10 @@
             initiator: entry.initiator || 'user',
             missed: entry.missed || false,
             partnerNote: entry.partnerNote || '',
-            userNote: entry.userNote || ''
+            userNote: entry.userNote || '',
+            kind: entry.kind || '',
+            eventType: entry.eventType || '',
+            eventText: entry.eventText || ''
         };
         // 关键修复：写入前先从 localforage 重新加载最新数据。
         // 原因：init() 调用 loadDiary() 时 SESSION_ID 可能尚未就绪（异步初始化），
@@ -397,13 +401,21 @@
                     const dur = formatDuration(e.duration);
 
                     const isMissed = !!e.missed;
-                    const initiatorLabel = isMissed
+                    const isDistance = e.mode === 'distance' || e.kind === 'distance';
+                    const initiatorLabel = isDistance
+                        ? '距离感知'
+                        : isMissed
                         ? (partnerName + '邀请')
                         : (e.initiator === 'partner' ? (partnerName + '邀请') : (userName + '邀请'));
-                    const initiatorClass = (e.initiator === 'partner' || isMissed) ? '' : 'cd-init-user';
+                    const initiatorClass = (isDistance || e.initiator === 'partner' || isMissed) ? '' : 'cd-init-user';
 
-                    const hasPartnerNote = !!e.partnerNote;
-                    const partnerRowHtml = hasPartnerNote
+                    const hasPartnerNote = !!e.partnerNote || !!e.eventText;
+                    const partnerRowHtml = isDistance
+                        ? '<div class="cd-note-row">' +
+                            '<span class="cd-note-who">' + escapeHtml(partnerName) + '：</span>' +
+                            '<span class="cd-note-text">' + escapeHtml(e.eventText || e.partnerNote || '距离发生了变化') + '</span>' +
+                          '</div>'
+                        : hasPartnerNote
                         ? '<div class="cd-note-row">' +
                             '<span class="cd-note-who">' + escapeHtml(partnerName) + '：</span>' +
                             '<span class="cd-note-text">' + escapeHtml(e.partnerNote) + '</span>' +
@@ -429,7 +441,10 @@
                           '<div class="cd-top-row">' +
                             '<span class="cd-initiator ' + initiatorClass + '">' + escapeHtml(initiatorLabel) + '</span>' +
                             missedTagHtml +
-                            (isMissed
+                            (isDistance
+                              ? '<span class="cd-mode-tag"><i class="fas ' + cfg.icon + '"></i>' + cfg.shortName + '</span>' +
+                                '<span class="cd-time-dur">' + time + '</span>'
+                              : isMissed
                               ? '<span class="cd-mode-tag"><i class="fas ' + cfg.icon + '"></i>' + cfg.shortName + '</span>' +
                                 '<span class="cd-time-dur">' + time + '</span>'
                               : '<span class="cd-mode-tag"><i class="fas ' + cfg.icon + '"></i>' + cfg.shortName + '</span>' +
@@ -590,6 +605,7 @@
             work:     '工作',
             exercise: '运动',
             sleep:    '睡觉',
+            distance: '距离',
             partner:  getPartnerName() + '邀请',
             user:     getUserName() + '邀请',
             missed:   getUserName() + '错过了'
@@ -627,7 +643,9 @@
         const cfg = MODE_CONFIG[entry.mode] || MODE_CONFIG.study;
         const d = new Date(entry.ts);
         const dateStr = (d.getMonth() + 1) + '月' + d.getDate() + '日';
-        const info = entry.missed
+        const info = (entry.mode === 'distance' || entry.kind === 'distance')
+            ? dateStr + ' · 距离 · ' + formatTime(entry.ts)
+            : entry.missed
             ? dateStr + ' · 错过了 ' + cfg.shortName + ' 邀请'
             : dateStr + ' · ' + cfg.shortName + ' · ' + formatDuration(entry.duration);
         document.getElementById('cd-note-edit-info').textContent = info;
@@ -662,7 +680,7 @@
     }
     function renderStats() {
         // 仅统计正常陪伴记录（非错过）
-        const normalEntries = _diaryEntries.filter(e => !e.missed);
+        const normalEntries = _diaryEntries.filter(e => !e.missed && e.mode !== 'distance' && e.kind !== 'distance');
         const totalCount = normalEntries.length;
         const totalDur = normalEntries.reduce((s, e) => s + (e.duration || 0), 0);
         document.getElementById('cd-total-count').textContent = totalCount;
@@ -670,7 +688,7 @@
 
         // 邀请来源（含错过）
         let partnerCnt = 0, userCnt = 0, missedCnt = 0;
-        _diaryEntries.forEach(e => {
+        _diaryEntries.filter(e => e.mode !== 'distance' && e.kind !== 'distance').forEach(e => {
             if (e.missed) missedCnt++;
             else if (e.initiator === 'partner') partnerCnt++;
             else userCnt++;

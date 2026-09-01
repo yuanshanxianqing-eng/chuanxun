@@ -10982,6 +10982,16 @@ function initComboMenu() {
         };
         wrapper.appendChild(customBtn);
 
+        const libraryBtn = document.createElement('button');
+        libraryBtn.className = 'poke-library-entry';
+        libraryBtn.innerHTML = '<i class="fas fa-box-archive"></i><span>我的拍一拍库</span><i class="fas fa-chevron-right"></i>';
+        libraryBtn.onclick = (e) => {
+            e.stopPropagation();
+            picker.classList.remove('active');
+            if (window.PokeLibraryFeature) window.PokeLibraryFeature.open();
+        };
+        wrapper.appendChild(libraryBtn);
+
         const userPresets = [
             "拍了拍对方的头",
             "戳了戳对方的脸颊",
@@ -11020,16 +11030,6 @@ function initComboMenu() {
             };
             wrapper.appendChild(item);
         });
-
-        const libraryBtn = document.createElement('button');
-        libraryBtn.className = 'poke-library-entry';
-        libraryBtn.innerHTML = '<i class="fas fa-box-archive"></i><span>我的拍一拍库</span><i class="fas fa-chevron-right"></i>';
-        libraryBtn.onclick = (e) => {
-            e.stopPropagation();
-            picker.classList.remove('active');
-            if (window.PokeLibraryFeature) window.PokeLibraryFeature.open();
-        };
-        wrapper.appendChild(libraryBtn);
 
         contentArea.appendChild(wrapper);
     }
@@ -11833,6 +11833,15 @@ function showPokeTab() {
     area.style.display = 'flex';
     area.style.flexDirection = 'column';
     area.style.gap = '8px';
+
+    const libraryBtn = document.createElement('button');
+    libraryBtn.className = 'poke-library-entry';
+    libraryBtn.innerHTML = '<i class="fas fa-box-archive"></i><span>我的拍一拍库</span><i class="fas fa-chevron-right"></i>';
+    libraryBtn.onclick = () => {
+        document.getElementById('user-sticker-picker').classList.remove('active');
+        if (window.PokeLibraryFeature) window.PokeLibraryFeature.open();
+    };
+    area.appendChild(libraryBtn);
     
     const quickPokes = window.PokeLibraryFeature
         ? window.PokeLibraryFeature.getQuick(customPokes)
@@ -11879,15 +11888,6 @@ function showPokeTab() {
         area.appendChild(btn);
     });
     
-    const libraryBtn = document.createElement('button');
-    libraryBtn.className = 'poke-library-entry';
-    libraryBtn.innerHTML = '<i class="fas fa-box-archive"></i><span>我的拍一拍库</span><i class="fas fa-chevron-right"></i>';
-    libraryBtn.onclick = () => {
-        document.getElementById('user-sticker-picker').classList.remove('active');
-        if (window.PokeLibraryFeature) window.PokeLibraryFeature.open();
-    };
-    area.appendChild(libraryBtn);
-
     const customBtn = document.createElement('button');
     customBtn.innerHTML = '<i class="fas fa-edit"></i> 自定义拍一拍';
     customBtn.style.cssText = `

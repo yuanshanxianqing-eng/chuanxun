@@ -33,7 +33,6 @@
         const homeBtn = document.getElementById('home-btn');
         const closeHomeBtn = document.getElementById('close-home');
         const homePage = document.getElementById('home-page');
-        const distanceBtn = document.getElementById('distance-btn');
 
         inviteBtn?.addEventListener('click', () => openModalById('invite-modal'));
         closeInviteBtn?.addEventListener('click', () => closeModalById('invite-modal'));
@@ -68,8 +67,6 @@
             document.body.style.overflow = 'hidden';
         });
         closeHomeBtn?.addEventListener('click', closeHome);
-
-        distanceBtn?.addEventListener('click', () => notifyPending('距离'));
 
         document.querySelectorAll('.hub-placeholder').forEach(card => {
             card.addEventListener('click', () => notifyPending(card.dataset.comingSoon || '这个功能'));

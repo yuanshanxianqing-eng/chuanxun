@@ -4,7 +4,7 @@
     "name":"番茄炒蛋",
     "category":"炒菜",
     "difficulty":1,
-    "assets":{"dish":"","goodCharacter":"","badCharacter":""},
+    "assets":{"dish":""},
     "ingredients":[
       {"id":"tomato","amount":2,"unit":"个","prep":"块"},
       {"id":"egg","amount":3,"unit":"个","prep":"打散"},
@@ -28,7 +28,7 @@
     "name":"牛肉咖喱",
     "category":"主食",
     "difficulty":2,
-    "assets":{"dish":"","goodCharacter":"","badCharacter":""},
+    "assets":{"dish":""},
     "ingredients":[
       {"id":"potato","amount":2,"unit":"个","prep":"块"},
       {"id":"carrot","amount":1,"unit":"根","prep":"块"},
@@ -55,7 +55,7 @@
     "name":"蒸水蛋",
     "category":"蒸菜",
     "difficulty":1,
-    "assets":{"dish":"","goodCharacter":"","badCharacter":""},
+    "assets":{"dish":""},
     "ingredients":[
       {"id":"egg","amount":2,"unit":"个","prep":"打散"},
       {"id":"water","amount":200,"unit":"ml","tolerance":20},
@@ -74,7 +74,7 @@
     "name":"香菇鸡汤",
     "category":"汤",
     "difficulty":2,
-    "assets":{"dish":"","goodCharacter":"","badCharacter":""},
+    "assets":{"dish":""},
     "ingredients":[
       {"id":"chicken","amount":300,"unit":"g","tolerance":20,"prep":"块"},
       {"id":"mushroom","amount":5,"unit":"朵","prep":"片"},

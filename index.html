@@ -25,6 +25,7 @@
     <link rel="stylesheet" href="css/enhancements.css">
     <link rel="stylesheet" href="css/companion-diary.css">
     <link rel="stylesheet" href="css/cinema.css">
+    <link rel="stylesheet" href="css/cooking.css">
     <style id="css-live-preview-style"></style>
 </head>
 <body>
@@ -745,7 +746,7 @@
                 <div class="home-page-heart"><i class="fas fa-heart"></i></div>
             </header>
             <div class="home-room-grid">
-                <button class="home-room-card home-room-kitchen hub-placeholder" data-coming-soon="一起做饭"><i class="fas fa-kitchen-set"></i><span>做饭</span><small>厨房</small></button>
+                <button class="home-room-card home-room-kitchen" id="cooking-room-entry"><i class="fas fa-kitchen-set"></i><span>做饭</span><small>厨房</small></button>
                 <button class="home-room-card home-room-movie hub-placeholder" data-coming-soon="家庭电影"><i class="fas fa-film"></i><span>电影</span><small>客厅</small></button>
                 <button class="home-room-card home-room-pet hub-placeholder" data-coming-soon="一起养宠物"><i class="fas fa-paw"></i><span>宠物</span><small>小窝</small></button>
                 <button class="home-room-card home-room-sleep hub-placeholder" data-coming-soon="一起睡觉"><i class="fas fa-bed"></i><span>睡觉</span><small>卧室</small></button>
@@ -2667,7 +2668,7 @@
 <section id="entertainment-page" aria-hidden="true">
     <div class="cs-topbar" id="ent-topbar">
         <button class="cs-icon-btn" type="button" onclick="closeEntertainment()"><i class="fas fa-chevron-left"></i></button>
-        <span class="cs-topbar-feed-title">电影院</span>
+        <span class="cs-topbar-feed-title cinema-page-title"><span>电影院</span></span>
         <button class="cs-icon-btn" type="button" style="visibility:hidden"><i class="fas fa-film"></i></button>
     </div>
     <div class="cs-content">
@@ -2690,5 +2691,6 @@
 <script src="js/cinema.js"></script>
 <script src="js/hubs.js"></script>
 <script src="js/companion.js"></script>
+<script src="js/cooking.js"></script>
 </body>
 </html>

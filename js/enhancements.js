@@ -63,30 +63,13 @@
         document.addEventListener('click', e => { if (!e.target.closest('.composer-popover-anchor')) document.querySelectorAll('.composer-mini-menu.open').forEach(x => x.classList.remove('open')); });
         $('continue-choice-btn')?.addEventListener('click', () => { $('continue-btn')?.click(); $('conversation-action-panel')?.classList.remove('open'); });
         $('batch-choice-btn')?.addEventListener('click', () => { $('batch-btn')?.click(); $('conversation-action-panel')?.classList.remove('open'); });
-        const input = $('message-input'), action = $('conversation-action-btn'), actionPanel = $('conversation-action-panel');
-        const syncAction = () => {
-            const hasText = !!input?.value.trim();
-            action?.classList.toggle('composer-send-state', hasText);
-            if (action) {
-                action.title = hasText ? '发送消息' : '继续说／有很多话想说';
-                action.innerHTML = hasText ? '<i class="fas fa-paper-plane"></i>' : '<i class="fas fa-comment-dots"></i>';
-            }
-            if (hasText) actionPanel?.classList.remove('open');
-        };
-        input?.addEventListener('input', syncAction);
+        const action = $('conversation-action-btn'), actionPanel = $('conversation-action-panel');
         action?.addEventListener('click', e => {
             e.stopPropagation();
-            if (input?.value.trim()) {
-                $('send-btn')?.click();
-                setTimeout(syncAction, 0);
-                return;
-            }
             const opening = !actionPanel?.classList.contains('open');
             document.querySelectorAll('.composer-mini-menu.open').forEach(x => x.classList.remove('open'));
             actionPanel?.classList.toggle('open', opening);
         });
-        syncAction();
-        $('videocall-btn')?.addEventListener('click', () => window.callFeature?.startCall?.(false));
         $('more-image-btn')?.addEventListener('click', () => $('image-input')?.click());
         $('more-redpacket-btn')?.addEventListener('click', () => window.TransferFeature?.open());
         $('more-redpacket-record-btn')?.addEventListener('click', () => window.TransferFeature?.openRecord());

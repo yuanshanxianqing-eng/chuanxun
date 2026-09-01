@@ -540,7 +540,7 @@
     // ── 公共 header HTML ────────────────────────────────
     function _hdHTML() {
         return '<div class="cinema-hd">' +
-            '<span class="cinema-hd-title">电影院</span>' +
+            '<span class="cinema-hd-spacer" aria-hidden="true"></span>' +
             '<button class="cs-icon-btn" id="cinema-archive-btn" title="影日志">' +
                 '<span class="cinema-archive-icon"></span>' +
             '</button>' +

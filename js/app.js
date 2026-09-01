@@ -2011,6 +2011,12 @@ async function handleVoiceBubbleClick(msg) {
                     return;
                 }
 
+                if (msg.type === 'cooking-card' && window.CookingFeature) {
+                    fragment.appendChild(window.CookingFeature.renderMessage(msg));
+                    lastSender = msg.sender;
+                    return;
+                }
+
                 if (msg.type === 'call-event') {
                     const callEvDiv = document.createElement('div');
                     callEvDiv.className = 'call-event-message';
@@ -10991,7 +10997,11 @@ function initComboMenu() {
         title.innerText = '快捷动作';
         wrapper.appendChild(title);
 
-        userPresets.forEach(text => {
+        const quickPokes = window.PokeLibraryFeature
+            ? window.PokeLibraryFeature.getQuick(customPokes.length ? customPokes : userPresets)
+            : userPresets;
+
+        quickPokes.forEach(text => {
             const item = document.createElement('div');
             item.className = 'poke-quick-item';
             item.innerText = text;
@@ -11009,6 +11019,16 @@ function initComboMenu() {
             };
             wrapper.appendChild(item);
         });
+
+        const libraryBtn = document.createElement('button');
+        libraryBtn.className = 'poke-library-entry';
+        libraryBtn.innerHTML = '<i class="fas fa-box-archive"></i><span>我的拍一拍库</span><i class="fas fa-chevron-right"></i>';
+        libraryBtn.onclick = (e) => {
+            e.stopPropagation();
+            picker.classList.remove('active');
+            if (window.PokeLibraryFeature) window.PokeLibraryFeature.open();
+        };
+        wrapper.appendChild(libraryBtn);
 
         contentArea.appendChild(wrapper);
     }

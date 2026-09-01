@@ -2386,6 +2386,7 @@ let metaHTML = '';
             return message;
         };
         window.addMessage = addMessage;
+        window.refreshMainMessages = () => renderMessages(false);
 
         // 陪伴功能只通过这层桥梁复用主站已有的聊天数据、头像、字卡和回复频率。
         window.CompanionBridge = {

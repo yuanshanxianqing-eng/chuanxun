@@ -16,6 +16,35 @@
 }
 #entertainment-page.cs-open { opacity: 1; pointer-events: all; }
 
+/* 页面只保留顶栏这一个标题，同时恢复原电影院标题的装饰感。 */
+.cinema-page-title {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 76px;
+    font-size: 17px;
+    font-weight: 750;
+    letter-spacing: 2px;
+    color: var(--text-primary);
+}
+.cinema-page-title span {
+    position: relative;
+    display: inline-block;
+    padding: 0 4px 5px;
+}
+.cinema-page-title span::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    width: 28px;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent, var(--accent-color), transparent);
+    transform: translateX(-50%);
+    box-shadow: 0 1px 7px rgba(var(--accent-color-rgb), .28);
+}
+
 /* ── 顶部：与情侣空间一致的 outer header（复用空间同款样式类）── */
 #ent-outer-header {
     padding: 0 16px;

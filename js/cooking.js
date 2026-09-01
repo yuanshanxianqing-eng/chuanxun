@@ -48,7 +48,6 @@
     let selectedTasteMessageId = null;
     let selectedTasteStars = 0;
     let timers = { auto: null, clock: null, hold: null, stirPrompt: null, toast: null };
-    let autoScheduleAnchor = null;
 
     function storageKey(name) {
         try {
@@ -337,7 +336,7 @@
             version: SESSION_VERSION, id: 'cook_' + Date.now(), mode, recipeId, invited: !!invited,
             stage: 'collect', currentStep: 0, currentPrep: 0, turnIndex: 0,
             collected: {}, prep: {}, stepProgress: {}, metrics: makeMetrics(), logs: [],
-            partnerDueAt: null,
+            partnerDueAt: null, partnerPending: null, partnerVisual: null,
             spectatorJoined: mode === 'solo_partner', spectatorJoinAt: mode === 'solo_user' && Math.random() < .6 ? rand(.1,.7) : null,
             startedAt: Date.now(), finishedAt: null, result: null
         };
@@ -370,6 +369,7 @@
         return session.turnIndex % 2 === 0 ? 'user' : 'partner';
     }
     function ownerLabel() { return activeOwner() === 'user' ? '轮到你操作' : '轮到' + getPartnerName() + '操作'; }
+    function partnerVisualIs(key) { return session?.partnerVisual === key; }
     function advanceTurn() { if (session.mode === 'together') session.turnIndex++; }
     function recipeProgress() {
         const recipe = getRecipe(session.recipeId);
@@ -434,7 +434,9 @@
             return (storageFilter === 'all' || ing.storage === storageFilter) && (!ingredientQuery || ing.name.includes(ingredientQuery));
         });
         const hint = `<div class="cook-step-hint"><b>${next ? ownerLabel() + '：取出' + getIngredient(next.id).name : '食材已经准备完成'}</b><span>可以搜索食材；数量错误不会立刻提示，只会影响结算。</span></div>`;
-        const main = `${hint}<div class="cook-recipe-toolbar"><input class="cook-search" id="cook-ing-search" value="${escapeHtml(ingredientQuery)}" placeholder="搜索食材"></div><div class="cook-storage-tabs">${storages.map(s => `<button data-storage="${s}" class="${s===storageFilter?'active':''}">${escapeHtml(storageNames[s] || s)}</button>`).join('')}</div><div class="cook-ingredient-grid">${visible.map(req => ingredientCardHtml(req, next)).join('')}</div>${allCollected(recipe) && activeOwner() === 'user' ? '<div class="cook-actions"><button class="cook-primary" id="cook-start-prep">开始备菜</button></div>' : ''}`;
+        const collectReady=allCollected(recipe), collectOwner=activeOwner();
+        const startButton=collectReady?`<div class="cook-actions"><button class="cook-primary ${partnerVisualIs('collect-finish')?'partner-clicked':''}" id="cook-start-prep" ${collectOwner==='user'?'':'disabled'}>开始备菜</button></div>`:'';
+        const main = `${hint}<div class="cook-recipe-toolbar"><input class="cook-search" id="cook-ing-search" value="${escapeHtml(ingredientQuery)}" placeholder="搜索食材"></div><div class="cook-storage-tabs">${storages.map(s => `<button data-storage="${s}" class="${s===storageFilter?'active':''}">${escapeHtml(storageNames[s] || s)}</button>`).join('')}</div><div class="cook-ingredient-grid">${visible.map(req => ingredientCardHtml(req, next)).join('')}</div>${startButton}`;
         const side = session.mode === 'solo_partner' || session.spectatorJoined ? logCardHtml() : checklistHtml(recipe);
         setShell(stageLayout(main, side));
         $('cook-ing-search')?.addEventListener('input', event => { ingredientQuery = event.target.value; renderCollect(); });
@@ -444,14 +446,16 @@
     }
     function ingredientCardHtml(req, next) {
         const ing = getIngredient(req.id);
-        const amount = tempAmounts[req.id] ?? session.collected[req.id] ?? 0;
+        const pendingAmount=session.partnerPending?.payload?.id===req.id?session.partnerPending.payload.actual:null;
+        const amount = pendingAmount ?? tempAmounts[req.id] ?? session.collected[req.id] ?? 0;
         const continuous = !discreteUnits.has(req.unit);
         const enabled = activeOwner() === 'user' && (session.mode !== 'together' || next?.id === req.id) && session.collected[req.id] == null;
+        const partnerClicked=partnerVisualIs('collect:'+req.id);
         const max = Math.max(Number(req.amount) * 1.5, Number(req.amount) + 20, 10);
         const tol = Number(req.tolerance) || Math.max(1, Number(req.amount) * .08);
         const left = clamp((Number(req.amount)-tol)/max*100,0,100), width=clamp(tol*2/max*100,2,100-left);
-        return `<article class="cook-ingredient-card" data-ing-card="${escapeHtml(req.id)}"><div class="cook-ingredient-head"><span class="ico">${ing.icon||'🥣'}</span><div><b>${escapeHtml(ing.name)}</b><small>${escapeHtml(storageNames[ing.storage]||ing.storage)} · 需要 ${escapeHtml(req.amount)}${escapeHtml(req.unit)}</small></div>${session.collected[req.id] != null ? '<i class="fas fa-circle-check" style="color:var(--accent-color)"></i>' : ''}</div>
-            ${continuous ? `<div class="cook-measure-track"><i class="cook-measure-target" style="left:${left}%;width:${width}%"></i><i class="cook-measure-fill" style="width:${clamp(amount/max*100,0,100)}%"></i><i class="cook-measure-pointer" style="left:${clamp(amount/max*100,0,100)}%"></i></div><button class="cook-hold-btn" data-measure="${escapeHtml(req.id)}" ${enabled?'':'disabled'}>点击开始 · <span>${Math.round(amount)}</span>${escapeHtml(req.unit)}</button>` : `<div class="cook-qty-row"><button data-qty="minus" ${enabled?'':'disabled'}>−</button><strong><span>${amount}</span> ${escapeHtml(req.unit)}</strong><button data-qty="plus" ${enabled?'':'disabled'}>+</button></div><button class="cook-primary" style="width:100%;margin-top:8px" data-collect="${escapeHtml(req.id)}" ${enabled&&amount>0?'':'disabled'}>放入食品清单</button>`}</article>`;
+        return `<article class="cook-ingredient-card ${partnerClicked?'partner-card-clicked':''}" data-ing-card="${escapeHtml(req.id)}"><div class="cook-ingredient-head"><span class="ico">${ing.icon||'🥣'}</span><div><b>${escapeHtml(ing.name)}</b><small>${escapeHtml(storageNames[ing.storage]||ing.storage)} · 需要 ${escapeHtml(req.amount)}${escapeHtml(req.unit)}</small></div>${session.collected[req.id] != null ? '<i class="fas fa-circle-check" style="color:var(--accent-color)"></i>' : ''}</div>
+            ${continuous ? `<div class="cook-measure-track"><i class="cook-measure-target" style="left:${left}%;width:${width}%"></i><i class="cook-measure-fill" style="width:${clamp(amount/max*100,0,100)}%"></i><i class="cook-measure-pointer" style="left:${clamp(amount/max*100,0,100)}%"></i></div><button class="cook-hold-btn ${partnerClicked?'partner-clicked':''}" data-measure="${escapeHtml(req.id)}" ${enabled?'':'disabled'}>点击开始 · <span>${Math.round(amount)}</span>${escapeHtml(req.unit)}</button>` : `<div class="cook-qty-row"><button data-qty="minus" ${enabled?'':'disabled'}>−</button><strong><span>${amount}</span> ${escapeHtml(req.unit)}</strong><button data-qty="plus" ${enabled?'':'disabled'}>+</button></div><button class="cook-primary ${partnerClicked?'partner-clicked':''}" style="width:100%;margin-top:8px" data-collect="${escapeHtml(req.id)}" ${enabled&&amount>0?'':'disabled'}>放入食品清单</button>`}</article>`;
     }
     function bindIngredientCards(recipe, next) {
         document.querySelectorAll('[data-ing-card]').forEach(card => {
@@ -513,8 +517,7 @@
         addLog('取出' + getIngredient(req.id).name + ' ' + actual + req.unit);
         advanceTurn(); maybeJoinSpectator(); maybePartnerSticker();
         saveSession(); renderCollect();
-        const recipe = getRecipe(session.recipeId);
-        if (allCollected(recipe) && activeOwner() === 'partner') scheduleAuto();
+        if (activeOwner() === 'partner') scheduleAuto();
     }
     function beginPrep() {
         session.stage = 'prep'; session.currentPrep = 0; saveSession(); renderPrep();
@@ -527,16 +530,17 @@
             const owner=activeOwner();
             setHeader('备菜完成', recipe.name + ' · ' + ownerLabel());
             const summary=queue.map(item=>`<span>${getIngredient(item.id).icon||'🥣'} ${escapeHtml(getIngredient(item.id).name)} · ${escapeHtml(session.prep[item.id]||item.prep)}</span>`).join('');
-            const main=`<div class="cook-step-hint"><b>所有食材都处理好了</b><span>确认完成备菜后，就会进入正式烹饪。</span></div><div class="cook-prep-card cook-prep-complete"><div class="cook-food-symbol">✨</div><h3>备菜完成</h3><div class="cook-prep-summary">${summary}</div>${owner==='user'?'<button class="cook-primary" id="cook-prep-finish">完成备菜</button>':'<p>正在等待对方确认备菜。</p>'}</div>`;
+            const main=`<div class="cook-step-hint"><b>所有食材都处理好了</b><span>确认完成备菜后，就会进入正式烹饪。</span></div><div class="cook-prep-card cook-prep-complete"><div class="cook-food-symbol">✨</div><h3>备菜完成</h3><div class="cook-prep-summary">${summary}</div><button class="cook-primary ${partnerVisualIs('prep-finish')?'partner-clicked':''}" id="cook-prep-finish" ${owner==='user'?'':'disabled'}>完成备菜</button></div>`;
             setShell(stageLayout(main, session.spectatorJoined||session.mode==='solo_partner'?logCardHtml():checklistHtml(recipe)));
             $('cook-prep-finish')?.addEventListener('click', completePrepStage);
             return;
         }
         const ing=getIngredient(req.id), owner=activeOwner();
         setHeader('备菜', `${session.currentPrep+1} / ${queue.length} · ${ownerLabel()}`);
-        const choices=[...new Set([req.prep,...cutOptions])].slice(0,8).sort(()=>Math.random()-.5);
+        const visualChoice=String(session.partnerVisual||'').startsWith('prep:'+req.id+':')?String(session.partnerVisual).split(':').slice(2).join(':'):'';
+        const choices=[...new Set([req.prep,visualChoice,...cutOptions].filter(Boolean))].slice(0,8).sort(()=>Math.random()-.5);
         const parts=[1,2,3,4].map((_,i)=>`<span class="cook-cut-part p${i+1}">${ing.icon||'🥣'}</span>`).join('');
-        const main=`<div class="cook-step-hint"><b>当前步骤 ${session.currentPrep+1} / ${queue.length}　${ing.name}：${req.prep}</b><span>${owner==='user'?'选择处理方式。错误不会即时公布。':'正在等待对方完成这张操作卡。'}</span></div><div class="cook-prep-card"><div class="cook-food-symbol cook-cut-symbol" id="cook-cut-symbol">${parts}</div><h3>${escapeHtml(ing.name)}</h3><p>菜谱需要：${escapeHtml(req.prep)}</p><div class="cook-cut-grid">${choices.map(choice=>`<button data-cut="${escapeHtml(choice)}" ${owner==='user'?'':'disabled'}>${escapeHtml(choice)}</button>`).join('')}</div></div>`;
+        const main=`<div class="cook-step-hint"><b>当前步骤 ${session.currentPrep+1} / ${queue.length}　${ing.name}：${req.prep}</b><span>${owner==='user'?'选择处理方式。错误不会即时公布。':'正在等待对方完成这张操作卡。'}</span></div><div class="cook-prep-card"><div class="cook-food-symbol cook-cut-symbol ${visualChoice?'split':''}" id="cook-cut-symbol">${parts}</div><h3>${escapeHtml(ing.name)}</h3><p>菜谱需要：${escapeHtml(req.prep)}</p><div class="cook-cut-grid">${choices.map(choice=>`<button class="${choice===visualChoice?'selected partner-clicked':''}" data-cut="${escapeHtml(choice)}" ${owner==='user'?'':'disabled'}>${escapeHtml(choice)}</button>`).join('')}</div></div>`;
         setShell(stageLayout(main, session.spectatorJoined||session.mode==='solo_partner'?logCardHtml():checklistHtml(recipe)));
         document.querySelectorAll('[data-cut]').forEach(btn=>btn.addEventListener('click',()=>animateAndCompletePrep(btn,req,btn.dataset.cut)));
     }
@@ -550,7 +554,7 @@
         session.prep[req.id]=choice;
         addMetric('prep', partnerScore == null ? (choice===req.prep?100:clamp(rand(25,72),0,100)) : partnerScore);
         addLog(getIngredient(req.id).name + (choice==='打散'?'打散':('切成'+choice)));
-        session.currentPrep++; advanceTurn(); maybeJoinSpectator(); maybePartnerSticker(); saveSession(); renderPrep();
+        session.currentPrep++; advanceTurn(); maybeJoinSpectator(); maybePartnerSticker(); saveSession(); renderPrep();if(activeOwner()==='partner')scheduleAuto();
     }
     function completePrepStage(){session.stage='cook';session.currentStep=0;session.stepProgress={};saveSession();renderCookingStep();}
 
@@ -578,39 +582,39 @@
         const disabled=owner==='user'?'':'disabled';
         if (step.type==='add') {
             const added=session.stepProgress.added||[];
-            return `<div class="cook-operation-card"><div class="cook-food-symbol">🍳</div><h3>把对应食材放进锅里</h3><p>放入后按钮会变色并显示完成标记</p><div class="cook-op-buttons">${(step.ingredients||[]).map(id=>`<button class="${added.includes(id)?'added':''}" data-add-ing="${escapeHtml(id)}" ${disabled} ${added.includes(id)?'disabled':''}>${added.includes(id)?'<i class="fas fa-check"></i> ':''}${getIngredient(id).icon||'🥣'} ${escapeHtml(getIngredient(id).name)}</button>`).join('')}</div>${added.length===(step.ingredients||[]).length&&owner==='user'?'<button class="cook-primary" id="cook-step-next" style="margin-top:18px">完成这一步</button>':''}</div>`;
+            const complete=added.length===(step.ingredients||[]).length;
+            return `<div class="cook-operation-card"><div class="cook-food-symbol">🍳</div><h3>把对应食材放进锅里</h3><p>放入后按钮会变色并显示完成标记</p><div class="cook-op-buttons">${(step.ingredients||[]).map(id=>`<button class="${added.includes(id)?'added':''} ${partnerVisualIs('add:'+id)?'partner-clicked':''}" data-add-ing="${escapeHtml(id)}" ${disabled} ${added.includes(id)?'disabled':''}>${added.includes(id)?'<i class="fas fa-check"></i> ':''}${getIngredient(id).icon||'🥣'} ${escapeHtml(getIngredient(id).name)}</button>`).join('')}</div>${complete?`<button class="cook-primary ${partnerVisualIs('add-finish')?'partner-clicked':''}" id="cook-step-next" style="margin-top:18px" ${disabled}>完成这一步</button>`:''}</div>`;
         }
         if (['heat','boil','steam'].includes(step.type)) {
             const running=session.stepProgress.timerStartedAt;
-            return `<div class="cook-operation-card"><div class="cook-food-symbol">${step.type==='steam'?'♨️':step.type==='boil'?'🥘':'🔥'}</div><h3>${escapeHtml(heatNames[step.heat]||'火力')} · ${escapeHtml(stepNames[step.type])}</h3><p>标准时间 ${step.minutes} 秒，开始后再次点击结束</p><div class="cook-timer-ring" id="cook-timer-ring"><span id="cook-timer-text">${running?'0.0':'准备'}</span></div><div class="cook-op-buttons"><button class="${running?'active':''}" id="cook-fire-toggle" ${disabled}>${running?'结束计时':'开始'+(heatNames[step.heat]||'计时')}</button></div></div>`;
+            return `<div class="cook-operation-card"><div class="cook-food-symbol">${step.type==='steam'?'♨️':step.type==='boil'?'🥘':'🔥'}</div><h3>${escapeHtml(heatNames[step.heat]||'火力')} · ${escapeHtml(stepNames[step.type])}</h3><p>标准时间 ${step.minutes} 秒，开始后再次点击结束</p><div class="cook-timer-ring" id="cook-timer-ring"><span id="cook-timer-text">${running?'0.0':'准备'}</span></div><div class="cook-op-buttons"><button class="${running?'active':''} ${partnerVisualIs(running?'timer-finish':'timer-start')?'partner-clicked':''}" id="cook-fire-toggle" ${disabled}>${running?'结束计时':'开始'+(heatNames[step.heat]||'计时')}</button></div></div>`;
         }
         if (step.type==='stirFry') {
             const running=session.stepProgress.stirStartedAt,taps=session.stepProgress.taps||[],target=stirTargetCount(step);
-            return `<div class="cook-operation-card" style="position:relative"><div class="cook-food-symbol">🍳</div><h3>保持翻炒节奏</h3><p>共需翻炒 ${target} 次 · 每 ${step.tapInterval||3} 秒按钮会亮起提醒</p><div class="cook-timer-ring" id="cook-timer-ring"><span id="cook-timer-text">${running?'0.0':'准备'}</span></div><div class="cook-stir-count" id="cook-stir-count">${taps.length} / ${target}</div><div class="cook-op-buttons">${running?`<button class="cook-stir-btn" id="cook-stir-tap" ${disabled}>翻炒</button><button id="cook-stir-finish" ${disabled} ${taps.length>=target?'':'disabled'}>完成翻炒</button>`:`<button id="cook-stir-start" ${disabled}>开始翻炒</button>`}</div></div>`;
+            const label=running?(taps.length>=target?'翻炒完成':`翻炒 ${taps.length} / ${target}`):'开始翻炒';
+            return `<div class="cook-operation-card" style="position:relative"><div class="cook-food-symbol">🍳</div><h3>保持翻炒节奏</h3><p>共需翻炒 ${target} 次 · 每 ${step.tapInterval||3} 秒按钮会亮起提醒</p><div class="cook-timer-ring" id="cook-timer-ring"><span id="cook-timer-text">${running?'0.0':'准备'}</span></div><div class="cook-stir-count" id="cook-stir-count">${taps.length} / ${target}</div><div class="cook-op-buttons"><button class="cook-stir-btn ${partnerVisualIs(running?'stir-tap':'stir-start')?'partner-clicked tap':''}" id="cook-stir-main" ${disabled} ${taps.length>=target?'disabled':''}>${label}</button></div></div>`;
         }
         if (step.type==='season') {
             const amounts=session.stepProgress.seasonings||{};
-            return `<div class="cook-operation-card"><div class="cook-food-symbol">🧂</div><h3>最后调味</h3><p>可以按照自己的感觉随便加</p><div class="cook-op-buttons">${(step.ingredients||[]).map(id=>`<span><b style="display:block;font-size:10px;margin-bottom:5px">${escapeHtml(getIngredient(id).name)}</b><button data-season="${id}" data-delta="-1" ${disabled}>−</button><i style="display:inline-block;min-width:25px;font-style:normal">${amounts[id]||0}</i><button data-season="${id}" data-delta="1" ${disabled}>+</button></span>`).join('')}</div>${owner==='user'?'<button class="cook-primary" id="cook-season-finish" style="margin-top:18px">完成调味</button>':''}</div>`;
+            return `<div class="cook-operation-card"><div class="cook-food-symbol">🧂</div><h3>最后调味</h3><p>可以按照自己的感觉随便加</p><div class="cook-op-buttons">${(step.ingredients||[]).map(id=>`<span class="${partnerVisualIs('season:'+id)?'partner-season-clicked':''}"><b style="display:block;font-size:10px;margin-bottom:5px">${escapeHtml(getIngredient(id).name)}</b><button data-season="${id}" data-delta="-1" ${disabled}>−</button><i style="display:inline-block;min-width:25px;font-style:normal">${amounts[id]||0}</i><button class="${partnerVisualIs('season:'+id)?'partner-clicked':''}" data-season="${id}" data-delta="1" ${disabled}>+</button></span>`).join('')}</div><button class="cook-primary ${partnerVisualIs('season-finish')?'partner-clicked':''}" id="cook-season-finish" style="margin-top:18px" ${disabled}>完成调味</button></div>`;
         }
-        return `<div class="cook-operation-card"><div class="cook-food-symbol">🍽️</div><h3>料理完成</h3><p>确认出锅，进入结算</p><div class="cook-op-buttons"><button id="cook-serve" ${disabled}>出锅</button></div></div>`;
+        return `<div class="cook-operation-card"><div class="cook-food-symbol">🍽️</div><h3>料理完成</h3><p>确认出锅，进入结算</p><div class="cook-op-buttons"><button class="${partnerVisualIs('serve')?'partner-clicked':''}" id="cook-serve" ${disabled}>出锅</button></div></div>`;
     }
     function bindOperation(step,owner) {
+        if(step.type==='stirFry'&&session.stepProgress.stirStartedAt){startClock(session.stepProgress.stirStartedAt,Math.max(2,Number(step.minutes)||2));if(owner==='user')startStirPrompts(step);}
+        else if(['heat','boil','steam'].includes(step.type)&&session.stepProgress.timerStartedAt)startClock(session.stepProgress.timerStartedAt,Math.max(2,Number(step.minutes)||2));
         if (owner!=='user') return;
         document.querySelectorAll('[data-add-ing]').forEach(btn=>btn.addEventListener('click',()=>{
             const list=session.stepProgress.added||(session.stepProgress.added=[]); list.push(btn.dataset.addIng); addLog('放入'+getIngredient(btn.dataset.addIng).name); saveSession(); renderCookingStep();
         }));
         $('cook-step-next')?.addEventListener('click',()=>completeCookingStep('operation',100));
         $('cook-fire-toggle')?.addEventListener('click',()=>toggleFireTimer(step));
-        $('cook-stir-start')?.addEventListener('click',()=>startStir(step));
-        $('cook-stir-tap')?.addEventListener('click',()=>tapStir(step));
-        $('cook-stir-finish')?.addEventListener('click',()=>finishStir(step));
+        $('cook-stir-main')?.addEventListener('click',()=>session.stepProgress.stirStartedAt?tapStir(step):startStir(step));
         document.querySelectorAll('[data-season]').forEach(btn=>btn.addEventListener('click',()=>{
             const map=session.stepProgress.seasonings||(session.stepProgress.seasonings={}); const id=btn.dataset.season; map[id]=Math.max(0,(map[id]||0)+Number(btn.dataset.delta)); saveSession(); renderCookingStep();
         }));
         $('cook-season-finish')?.addEventListener('click',()=>finishSeason(step));
         $('cook-serve')?.addEventListener('click',finishCooking);
-        if(step.type==='stirFry'&&session.stepProgress.stirStartedAt){startClock(session.stepProgress.stirStartedAt,Math.max(2,step.minutes));startStirPrompts(step);}
-        else if(['heat','boil','steam'].includes(step.type)&&session.stepProgress.timerStartedAt)startClock(session.stepProgress.timerStartedAt,Math.max(2,step.minutes));
     }
     function startClock(startedAt,targetSecs) {
         clearClock();
@@ -626,16 +630,17 @@
         const elapsed=(Date.now()-session.stepProgress.timerStartedAt)/1000,target=Math.max(2,Number(step.minutes)||2),score=clamp(100-Math.abs(elapsed-target)/target*130,0,100);addLog((heatNames[step.heat]||'火力')+'持续 '+elapsed.toFixed(1)+' 秒');completeCookingStep('heat',score);
     }
     function stirTargetCount(step){return Math.max(1,Math.ceil((Number(step.minutes)||3)/(Number(step.tapInterval)||3)));}
-    function startStir(step){session.stepProgress.stirStartedAt=Date.now();session.stepProgress.taps=[];addLog('开始翻炒，需要 '+stirTargetCount(step)+' 次');saveSession();renderCookingStep();}
+    function startStir(step){const interval=(Number(step.tapInterval)||3)*1000;session.stepProgress.stirStartedAt=Date.now();session.stepProgress.taps=[];session.stepProgress.nextStirPromptAt=Date.now()+interval;addLog('开始翻炒，需要 '+stirTargetCount(step)+' 次');saveSession();renderCookingStep();}
     function startStirPrompts(step){
         clearInterval(timers.stirPrompt);
         const interval=(Number(step.tapInterval)||3)*1000;
-        const tick=()=>{const taps=session?.stepProgress?.taps||[],last=taps.length?taps[taps.length-1]:session?.stepProgress?.stirStartedAt||Date.now(),due=Date.now()-last>=interval;$('cook-stir-tap')?.classList.toggle('prompt',due);};
+        if(!session.stepProgress.nextStirPromptAt){const taps=session.stepProgress.taps||[],last=taps.length?taps[taps.length-1]:session.stepProgress.stirStartedAt;session.stepProgress.nextStirPromptAt=last+interval;saveSession();}
+        const tick=()=>{$('cook-stir-main')?.classList.toggle('prompt',Date.now()>=Number(session?.stepProgress?.nextStirPromptAt||Infinity));};
         tick();timers.stirPrompt=setInterval(tick,180);
     }
-    function tapStir(step){const now=Date.now(),taps=session.stepProgress.taps||(session.stepProgress.taps=[]),target=stirTargetCount(step);if(taps.length>=target)return;taps.push(now);const btn=$('cook-stir-tap');btn?.classList.remove('prompt');btn?.classList.add('tap');setTimeout(()=>btn?.classList.remove('tap'),140);if($('cook-stir-count'))$('cook-stir-count').textContent=taps.length+' / '+target;if(taps.length>=target&&$('cook-stir-finish'))$('cook-stir-finish').disabled=false;saveSession();}
+    function tapStir(step){const now=Date.now(),taps=session.stepProgress.taps||(session.stepProgress.taps=[]),target=stirTargetCount(step),interval=(Number(step.tapInterval)||3)*1000;if(taps.length>=target)return;taps.push(now);session.stepProgress.nextStirPromptAt=now+interval;const btn=$('cook-stir-main');btn?.classList.remove('prompt');btn?.classList.add('tap');if(btn)btn.textContent=taps.length>=target?'翻炒完成':`翻炒 ${taps.length} / ${target}`;if($('cook-stir-count'))$('cook-stir-count').textContent=taps.length+' / '+target;saveSession();if(taps.length>=target){if(btn)btn.disabled=true;clearInterval(timers.stirPrompt);timers.stirPrompt=null;setTimeout(()=>finishStir(step),520);}else setTimeout(()=>btn?.classList.remove('tap'),420);}
     function finishStir(step){
-        const elapsed=(Date.now()-session.stepProgress.stirStartedAt)/1000,target=Math.max(2,Number(step.minutes)||2),interval=Number(step.tapInterval)||3,taps=session.stepProgress.taps||[];
+        const elapsed=(Date.now()-session.stepProgress.stirStartedAt)/1000,interval=Number(step.tapInterval)||3,taps=session.stepProgress.taps||[],target=stirTargetCount(step)*interval;
         const intervals=[];for(let i=1;i<taps.length;i++)intervals.push((taps[i]-taps[i-1])/1000);
         const intervalScore=intervals.length?avg(intervals.map(v=>clamp(100-Math.abs(v-interval)/interval*100,0,100)),60):45;
         const durationScore=clamp(100-Math.abs(elapsed-target)/target*90,0,100);addLog('完成翻炒');completeCookingStep('operation',intervalScore*.7+durationScore*.3);
@@ -644,49 +649,137 @@
         const map=session.stepProgress.seasonings||{};let scores=[];for(const id of step.ingredients||[]){const req=getRecipe(session.recipeId).ingredients.find(x=>x.id===id);if(req)scores.push(scoreAmount(req,map[id]||0));addLog('加入'+getIngredient(id).name+' '+(map[id]||0)+'份');}
         completeCookingStep('seasoning',avg(scores,70));
     }
-    function completeCookingStep(metric,score){clearClock();addMetric(metric,score);session.currentStep++;session.stepProgress={};advanceTurn();maybeJoinSpectator();maybePartnerSticker();saveSession();renderCookingStep();}
+    function completeCookingStep(metric,score){clearClock();addMetric(metric,score);session.currentStep++;session.stepProgress={};advanceTurn();maybeJoinSpectator();maybePartnerSticker();saveSession();renderCookingStep();if(session&&session.stage!=='result'&&activeOwner()==='partner')scheduleAuto();}
 
-    function autoDelay(){
-        if(!session)return 500;
-        if(session.stage==='collect'||session.stage==='prep')return rand(260,620);
-        const step=currentCookingStep();
-        if(step&&['heat','boil','steam','stirFry'].includes(step.type))return clamp((Number(step.minutes)||2)*180,650,5200);
-        return rand(320,720);
+    function autoDelay(){return Math.round(rand(1000,3000));}
+    function renderPartnerAction(){
+        if(!session)return;
+        if(session.stage==='collect')renderCollect();
+        else if(session.stage==='prep')renderPrep();
+        else if(session.stage==='cook')renderCookingStep();
+    }
+    function stagePartnerClick(key,action,payload,holdMs){
+        session.partnerVisual=key;
+        session.partnerPending={action,payload:payload||{}};
+        session.partnerDueAt=Date.now()+(holdMs||520);
+        saveSession();renderPartnerAction();
+    }
+    function clearPartnerClick(){session.partnerVisual=null;session.partnerPending=null;session.partnerDueAt=null;}
+    function commitPartnerAction(pending){
+        if(!session||!pending)return;
+        const recipe=getRecipe(session.recipeId),payload=pending.payload||{};
+        clearPartnerClick();
+        if(pending.action==='collect'){
+            const req=recipe.ingredients.find(x=>x.id===payload.id);if(req)finalizeCollected(req,payload.actual,payload.score);return;
+        }
+        if(pending.action==='beginPrep'){
+            if(session.mode==='together')advanceTurn();beginPrep();return;
+        }
+        if(pending.action==='prep'){
+            const req=prepQueue(recipe)[session.currentPrep];if(req)completePrep(req,payload.choice,payload.score);return;
+        }
+        if(pending.action==='finishPrep'){
+            if(session.mode==='together')advanceTurn();completePrepStage();return;
+        }
+        if(pending.action==='addIngredient'){
+            const list=session.stepProgress.added||(session.stepProgress.added=[]);
+            if(!list.includes(payload.id)){list.push(payload.id);addLog('放入'+getIngredient(payload.id).name);}
+            saveSession();renderCookingStep();return;
+        }
+        if(pending.action==='finishAdd'){completeCookingStep('operation',payload.score);return;}
+        if(pending.action==='startTimer'){
+            session.stepProgress.timerStartedAt=Date.now();session.stepProgress.partnerScore=payload.score;
+            addLog('开启'+(heatNames[payload.heat]||'火力'));
+            session.partnerDueAt=session.stepProgress.timerStartedAt+Math.max(2,Number(payload.seconds)||2)*1000;
+            saveSession();renderCookingStep();return;
+        }
+        if(pending.action==='finishTimer'){
+            const elapsed=(Date.now()-session.stepProgress.timerStartedAt)/1000;
+            addLog((heatNames[payload.heat]||'火力')+'持续 '+elapsed.toFixed(1)+' 秒');
+            completeCookingStep('heat',payload.score);return;
+        }
+        if(pending.action==='startStir'){
+            const interval=Math.max(1,Number(payload.interval)||3)*1000;
+            session.stepProgress.stirStartedAt=Date.now();session.stepProgress.taps=[];session.stepProgress.partnerScore=payload.score;
+            session.stepProgress.nextStirPromptAt=session.stepProgress.stirStartedAt+interval;
+            session.partnerDueAt=session.stepProgress.nextStirPromptAt;
+            addLog('开始翻炒，需要 '+stirTargetCount(currentCookingStep())+' 次');saveSession();renderCookingStep();return;
+        }
+        if(pending.action==='afterStirTap'){
+            const step=currentCookingStep(),taps=session.stepProgress.taps||[],target=stirTargetCount(step);
+            if(taps.length>=target){addLog('完成翻炒');completeCookingStep('operation',payload.score);return;}
+            session.partnerDueAt=Math.max(Date.now()+20,Number(payload.tappedAt)+(Number(payload.interval)||3)*1000);
+            saveSession();renderCookingStep();return;
+        }
+        if(pending.action==='season'){
+            const map=session.stepProgress.seasonings||(session.stepProgress.seasonings={});map[payload.id]=payload.amount;
+            addLog('加入'+getIngredient(payload.id).name+' '+payload.amount+'份');saveSession();renderCookingStep();return;
+        }
+        if(pending.action==='finishSeason'){completeCookingStep('seasoning',payload.score);return;}
+        if(pending.action==='serve'){finishCooking();}
     }
     function scheduleAuto(){
         clearTimeout(timers.auto);timers.auto=null;
         if(!session||activeOwner()!=='partner'||session.stage==='result')return;
-        if(!session.partnerDueAt){session.partnerDueAt=(autoScheduleAnchor||Date.now())+autoDelay();saveSession();}
+        if(!session.partnerDueAt){
+            const step=session.stage==='cook'?currentCookingStep():null;
+            if(step&&['heat','boil','steam'].includes(step.type)&&session.stepProgress.timerStartedAt){
+                session.partnerDueAt=session.stepProgress.timerStartedAt+Math.max(2,Number(step.minutes)||2)*1000;
+            }else if(step?.type==='stirFry'&&session.stepProgress.stirStartedAt){
+                const taps=session.stepProgress.taps||[],last=taps.length?taps[taps.length-1]:session.stepProgress.stirStartedAt;
+                session.partnerDueAt=last+Math.max(1,Number(step.tapInterval)||3)*1000;
+            }else session.partnerDueAt=Date.now()+autoDelay();
+            saveSession();
+        }
         timers.auto=setTimeout(runPartnerEngine,Math.max(20,session.partnerDueAt-Date.now()));
     }
     function runPartnerEngine(){
         clearTimeout(timers.auto);timers.auto=null;
         if(!session||activeOwner()!=='partner'||session.stage==='result')return;
-        let guard=0;
-        while(session&&activeOwner()==='partner'&&session.stage!=='result'&&Number(session.partnerDueAt||0)<=Date.now()&&guard++<80){
-            autoScheduleAnchor=Number(session.partnerDueAt)||Date.now();
-            session.partnerDueAt=null;
-            autoAction();
-        }
-        autoScheduleAnchor=null;
+        if(Number(session.partnerDueAt||0)>Date.now())return scheduleAuto();
+        const pending=session.partnerPending;
+        if(pending)commitPartnerAction(pending);else{session.partnerDueAt=null;autoAction();}
         scheduleAuto();
     }
     function autoAction(){
         if(!session||activeOwner()!=='partner')return;
         const recipe=getRecipe(session.recipeId),score=partnerStepScore();
         if(session.stage==='collect'){
-            const req=nextCollectRequirement(recipe);if(!req){session.stage='prep';session.currentPrep=0;advanceTurn();saveSession();return renderPrep();}
-            const actual=score>=90?Number(req.amount)+rand(-(req.tolerance||0),(req.tolerance||0)):Math.max(.1,Number(req.amount)*rand(.55,1.45));finalizeCollected(req,discreteUnits.has(req.unit)?Math.max(1,Math.round(actual)):Math.round(actual),score);return;
+            const req=nextCollectRequirement(recipe);if(!req)return stagePartnerClick('collect-finish','beginPrep');
+            const raw=score>=90?Number(req.amount)+rand(-(req.tolerance||0),(req.tolerance||0)):Math.max(.1,Number(req.amount)*rand(.55,1.45));
+            const actual=discreteUnits.has(req.unit)?Math.max(1,Math.round(raw)):Math.round(raw);
+            stagePartnerClick('collect:'+req.id,'collect',{id:req.id,actual,score});return;
         }
         if(session.stage==='prep'){
-            const queue=prepQueue(recipe),req=queue[session.currentPrep];if(!req){if(session.mode==='together')advanceTurn();return completePrepStage();}
-            completePrep(req,score>=90?req.prep:pick(cutOptions.filter(x=>x!==req.prep)),score);return;
+            const queue=prepQueue(recipe),req=queue[session.currentPrep];if(!req)return stagePartnerClick('prep-finish','finishPrep');
+            const choice=score>=90?req.prep:pick(cutOptions.filter(x=>x!==req.prep));
+            stagePartnerClick('prep:'+req.id+':'+choice,'prep',{choice,score});return;
         }
         if(session.stage==='cook'){
             const step=currentCookingStep();if(!step)return finishCooking();
-            if(step.type==='serve')return finishCooking();
-            addLog(stepDescription(step));
-            completeCookingStep(step.type==='season'?'seasoning':step.type==='stirFry'||step.type==='add'?'operation':'heat',score);return;
+            if(step.type==='add'){
+                const added=session.stepProgress.added||(session.stepProgress.added=[]),id=(step.ingredients||[]).find(x=>!added.includes(x));
+                if(id)return stagePartnerClick('add:'+id,'addIngredient',{id});
+                return stagePartnerClick('add-finish','finishAdd',{score});
+            }
+            if(['heat','boil','steam'].includes(step.type)){
+                if(!session.stepProgress.timerStartedAt)return stagePartnerClick('timer-start','startTimer',{heat:step.heat,seconds:step.minutes,score});
+                return stagePartnerClick('timer-finish','finishTimer',{heat:step.heat,score:session.stepProgress.partnerScore??score});
+            }
+            if(step.type==='stirFry'){
+                const interval=Math.max(1,Number(step.tapInterval)||3),target=stirTargetCount(step);
+                if(!session.stepProgress.stirStartedAt)return stagePartnerClick('stir-start','startStir',{interval,score});
+                const taps=session.stepProgress.taps||(session.stepProgress.taps=[]);if(taps.length>=target){addLog('完成翻炒');return completeCookingStep('operation',session.stepProgress.partnerScore??score);}
+                const tappedAt=Date.now();taps.push(tappedAt);session.stepProgress.nextStirPromptAt=tappedAt+interval*1000;
+                session.partnerVisual='stir-tap';session.partnerPending={action:'afterStirTap',payload:{tappedAt,interval,score:session.stepProgress.partnerScore??score}};session.partnerDueAt=Date.now()+520;saveSession();renderCookingStep();return;
+            }
+            if(step.type==='season'){
+                const map=session.stepProgress.seasonings||(session.stepProgress.seasonings={}),id=(step.ingredients||[]).find(x=>map[x]==null);
+                if(id){const req=recipe.ingredients.find(x=>x.id===id),base=Math.max(1,Number(req?.amount)||1),amount=score>=90?Math.max(1,Math.round(base)):Math.max(0,Math.round(base*rand(.45,1.7)));return stagePartnerClick('season:'+id,'season',{id,amount});}
+                return stagePartnerClick('season-finish','finishSeason',{score});
+            }
+            if(step.type==='serve')return stagePartnerClick('serve','serve');
+            completeCookingStep('operation',score);return;
         }
     }
 

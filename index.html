@@ -27,6 +27,7 @@
     <link rel="stylesheet" href="css/cinema.css">
     <link rel="stylesheet" href="css/cooking.css">
     <link rel="stylesheet" href="css/distance.css">
+    <link rel="stylesheet" href="css/bookshelf-enhanced.css">
     <style id="css-live-preview-style"></style>
 </head>
 <body>
@@ -1683,7 +1684,7 @@
             </div>
         </div>
         <div id="bookshelf-grid" class="bookshelf-grid"></div>
-        <input type="file" id="bs-txt-input" accept=".txt" style="display: none;">
+        <input type="file" id="bs-txt-input" accept=".txt,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display: none;">
         <input type="file" id="bs-cover-input" accept="image/*" style="display: none;">
         <div class="modal-buttons" style="padding: 12px 16px; border-top: 1px solid var(--border-color); flex-shrink: 0;">
             <button class="modal-btn modal-btn-secondary" id="close-bookshelf">关闭</button>
@@ -2664,6 +2665,9 @@
 </div>
 
 <script src="js/journey.js"></script>
+
+<script src="js/vendor/jszip.min.js"></script>
+<script src="js/bookshelf-enhanced.js"></script>
 
 <!-- 电影院沿用现有“邀约”入口，在当前框架内打开，不跳转到空间页 -->
 <section id="entertainment-page" aria-hidden="true">

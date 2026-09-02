@@ -10,13 +10,22 @@
 @media(max-width:600px){.bs-resume-setting small{display:none}.book-detail-modal-content{width:100vw!important;max-height:100dvh!important;border-radius:22px 22px 0 0!important}.book-detail-hero{grid-template-columns:102px 1fr;gap:18px;min-height:225px;padding:30px 20px 22px}.book-detail-meta h2{font-size:22px}.book-detail-section{padding:20px 16px}.book-chapter-list{grid-template-columns:1fr}.book-comment-compose{grid-template-columns:1fr}.book-comment-compose>button,.book-comment-compose>small{grid-column:1}.reader-header{gap:6px}.reader-title{max-width:92px}.reader-font-controls{display:none}.reader-size-controls button{min-width:21px}.reader-size-small{width:88vw!important;height:42vh!important;left:6vw!important;bottom:12px!important}.reader-size-half{width:100vw!important;height:52dvh!important;left:0!important;bottom:0!important;transform:none;border-radius:18px 18px 0 0!important}.reader-size-large{width:96vw!important;height:86dvh!important;left:2vw!important;top:7dvh!important;transform:none}.reader-size-full{width:100vw!important;height:100dvh!important;left:0!important;top:0!important}.reader-person b{max-width:56px}.reader-together-center span{display:none}}
 
 /* 覆盖主样式中 reader-window 的 ID 尺寸，确保四档窗口在手机端也生效。 */
-#reader-window.reader-size-small{width:min(420px,44vw)!important;height:min(420px,42vh)!important;left:18px!important;top:auto!important;bottom:22px!important}
+#reader-window.reader-size-small{width:min(330px,35vw)!important;height:min(330px,34vh)!important;left:18px!important;top:auto!important;bottom:22px!important}
 #reader-window.reader-size-half{width:min(760px,78vw)!important;height:54vh!important;left:50%!important;top:auto!important;bottom:18px!important;transform:translateX(-50%)}
 #reader-window.reader-size-large{width:min(920px,92vw)!important;height:84vh!important;left:50%!important;top:8vh!important;transform:translateX(-50%)}
 #reader-window.reader-size-full{width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;left:0!important;top:0!important;bottom:auto!important;transform:none!important;border-radius:0!important}
 @media(max-width:600px){
-  #reader-window.reader-size-small{width:88vw!important;height:42vh!important;left:6vw!important;bottom:12px!important}
+  #reader-window.reader-size-small{width:72vw!important;height:34dvh!important;left:14vw!important;bottom:12px!important}
   #reader-window.reader-size-half{width:100vw!important;height:52dvh!important;left:0!important;bottom:0!important;transform:none!important;border-radius:18px 18px 0 0!important}
   #reader-window.reader-size-large{width:96vw!important;height:86dvh!important;left:2vw!important;top:7dvh!important;transform:none!important}
   #reader-window.reader-size-full{width:100vw!important;height:100dvh!important;left:0!important;top:0!important;bottom:auto!important;transform:none!important}
 }
+
+#reader-header{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+#reader-header:active{cursor:grabbing}
+#reader-window.reader-dragged{left:var(--reader-drag-x)!important;top:var(--reader-drag-y)!important;right:auto!important;bottom:auto!important;transform:none!important}
+.reader-together-bar{position:relative;overflow:visible}
+.reader-together-toast{position:absolute;z-index:12;left:50%;top:calc(100% + 7px);transform:translateX(-50%);display:flex;align-items:center;gap:7px;width:max-content;max-width:calc(100vw - 28px);padding:7px 11px;border:1px solid rgba(var(--accent-color-rgb),.22);border-radius:999px;background:rgba(var(--secondary-bg-rgb,255,255,255),.92);color:var(--text-primary);box-shadow:0 9px 24px rgba(0,0,0,.12);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);animation:reader-together-toast-in .28s ease both}
+.reader-together-toast>span{width:23px;height:23px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:rgba(var(--accent-color-rgb),.12);font-size:8px;color:var(--accent-color)}
+.reader-together-toast img{width:100%;height:100%;object-fit:cover}.reader-together-toast b{font-size:9px;white-space:nowrap}
+@keyframes reader-together-toast-in{from{opacity:0;transform:translate(-50%,-7px) scale(.94)}to{opacity:1;transform:translate(-50%,0) scale(1)}}

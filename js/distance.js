@@ -9,7 +9,7 @@
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
     const rnd = (min, max) => min + Math.random() * (max - min);
 
-    let preferences = { showAvatar: false, showNames: true, directionMode: 'cardinal', panelCollapsed: false };
+    let preferences = { showAvatar: false, showMyAvatar: false, showNames: true, directionMode: 'cardinal', panelCollapsed: false };
     let records = [];
     let loaded = false;
     let pageOpen = false;
@@ -71,7 +71,8 @@
                     <div class="dist-head-right">
                         <button class="dist-gear" id="dist-gear" title="距离设置"><i class="fas fa-gear"></i></button>
                         <div class="dist-settings" id="dist-settings">
-                            <div class="dist-setting-row"><div class="dist-setting-name">显示头像<span class="dist-setting-sub">使用主站梦角头像</span></div><button class="dist-toggle" id="dist-avatar-toggle"></button></div>
+                            <div class="dist-setting-row"><div class="dist-setting-name">显示对方头像<span class="dist-setting-sub">使用主站梦角头像</span></div><button class="dist-toggle" id="dist-avatar-toggle"></button></div>
+                            <div class="dist-setting-row"><div class="dist-setting-name">显示我的头像<span class="dist-setting-sub">使用主站我的头像</span></div><button class="dist-toggle" id="dist-my-avatar-toggle"></button></div>
                             <div class="dist-setting-row"><div class="dist-setting-name">显示名字<span class="dist-setting-sub">控制坐标下方姓名</span></div><button class="dist-toggle" id="dist-name-toggle"></button></div>
                             <div class="dist-setting-row"><div class="dist-setting-name">方位模式<span class="dist-setting-sub" id="dist-direction-sub">当前：东西南北</span></div><button class="dist-seg" id="dist-direction-btn">切换</button></div>
                         </div>
@@ -87,7 +88,7 @@
                         <div class="dist-signal"></div><div class="dist-signal dist-s2"></div>
                         <div class="dist-ripple dist-r1"></div><div class="dist-ripple dist-r2"></div><div class="dist-ripple dist-r3"></div>
                         <span class="dist-twinkle dist-t1">✦</span><span class="dist-twinkle dist-t2">✦</span><span class="dist-twinkle dist-t3">✦</span><span class="dist-twinkle dist-t4">✦</span><span class="dist-twinkle dist-t5">✦</span>
-                        <div class="dist-center"><div class="dist-me">✦</div><div class="dist-me-label" id="dist-me-label">我</div></div>
+                        <div class="dist-center" id="dist-center"><div class="dist-me-avatar" id="dist-me-avatar"></div><div class="dist-me">✦</div><div class="dist-me-label" id="dist-me-label">我</div></div>
                         <div class="dist-char" id="dist-char"><div class="dist-avatar" id="dist-avatar"></div><div class="dist-marker"><span class="dist-marker-cross"></span><span class="dist-marker-star">✦</span><span class="dist-char-label" id="dist-partner-label">梦角</span></div></div>
                     </div>
                     <aside class="dist-side-panel" id="dist-side-panel">
@@ -134,8 +135,10 @@
         const page = $('distance-page');
         const character = $('dist-char');
         $('dist-avatar-toggle')?.classList.toggle('active', !!preferences.showAvatar);
+        $('dist-my-avatar-toggle')?.classList.toggle('active', !!preferences.showMyAvatar);
         $('dist-name-toggle')?.classList.toggle('active', preferences.showNames !== false);
         character?.classList.toggle('show-avatar', !!preferences.showAvatar);
+        $('dist-center')?.classList.toggle('show-my-avatar', !!preferences.showMyAvatar);
         page?.classList.toggle('hide-names', preferences.showNames === false);
         $('dist-side-panel')?.classList.toggle('collapsed', !!preferences.panelCollapsed);
         updateDirectionLabels();
@@ -148,8 +151,10 @@
         if ($('dist-me-label')) $('dist-me-label').textContent = me;
         const source = $('partner-avatar')?.querySelector('img')?.src || '';
         const avatar = $('dist-avatar');
-        if (!avatar) return;
-        avatar.innerHTML = source ? `<img src="${escapeHtml(source)}" alt="${escapeHtml(partner)}">` : `<span>${escapeHtml(partner.slice(0, 1) || '梦')}</span>`;
+        if (avatar) avatar.innerHTML = source ? `<img src="${escapeHtml(source)}" alt="${escapeHtml(partner)}">` : `<span>${escapeHtml(partner.slice(0, 1) || '梦')}</span>`;
+        const mySource = $('my-avatar')?.querySelector('img')?.src || '';
+        const myAvatar = $('dist-me-avatar');
+        if (myAvatar) myAvatar.innerHTML = mySource ? `<img src="${escapeHtml(mySource)}" alt="${escapeHtml(me)}">` : `<span>${escapeHtml(me.slice(0, 1) || '我')}</span>`;
     }
 
     async function openDistance() {
@@ -328,6 +333,7 @@
         $('dist-settings')?.addEventListener('click', event => event.stopPropagation());
         document.addEventListener('click', () => $('dist-settings')?.classList.remove('show'));
         $('dist-avatar-toggle')?.addEventListener('click', () => { preferences.showAvatar = !preferences.showAvatar; applyPreferences(); savePreferences(); });
+        $('dist-my-avatar-toggle')?.addEventListener('click', () => { preferences.showMyAvatar = !preferences.showMyAvatar; applyPreferences(); savePreferences(); });
         $('dist-name-toggle')?.addEventListener('click', () => { preferences.showNames = preferences.showNames === false; applyPreferences(); savePreferences(); });
         $('dist-direction-btn')?.addEventListener('click', () => { preferences.directionMode = preferences.directionMode === 'cardinal' ? 'relative' : 'cardinal'; applyPreferences(); savePreferences(); updateSenses(Date.now()); });
         $('dist-panel-collapse')?.addEventListener('click', () => { preferences.panelCollapsed = !preferences.panelCollapsed; applyPreferences(); savePreferences(); });

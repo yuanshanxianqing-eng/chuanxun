@@ -547,6 +547,30 @@
         '</div>';
     }
 
+    function _cinemaLobbyHeroHTML(mode, title, subtitle) {
+        var pName = (typeof settings !== 'undefined' && settings.partnerName) || '梦角';
+        var mName = (typeof settings !== 'undefined' && settings.myName) || '我';
+        return '<section class="cinema-lobby-hero cinema-lobby-' + _escapeHtml(mode || 'idle') + '">' +
+            '<div class="cinema-curtain cinema-curtain-left"></div><div class="cinema-curtain cinema-curtain-right"></div>' +
+            '<div class="cinema-projector-beam"></div><div class="cinema-film-reel cinema-reel-one"><i></i><i></i><i></i><i></i></div><div class="cinema-film-reel cinema-reel-two"><i></i><i></i><i></i><i></i></div>' +
+            '<div class="cinema-lobby-stars"><i>✦</i><i>✧</i><i>✦</i></div>' +
+            '<div class="cinema-lobby-screen"><span class="cinema-lobby-kicker">PRIVATE SCREENING ROOM</span><h2>' + _escapeHtml(title || '两个人的放映厅') + '</h2><p>' + _escapeHtml(subtitle || '挑一部想看的电影，约定属于你们的开场时间。') + '</p></div>' +
+            '<div class="cinema-lobby-couple"><div class="cinema-lobby-person"><span>' + _avatarHTML(false, 34) + '</span><b>' + _escapeHtml(mName) + '</b></div><div class="cinema-lobby-seat"><i class="fas fa-couch"></i><em></em><small>双人席</small></div><div class="cinema-lobby-person"><span>' + _avatarHTML(true, 34) + '</span><b>' + _escapeHtml(pName) + '</b></div></div>' +
+        '</section>';
+    }
+    function _cinemaLobbyToolsHTML() {
+        return '<div class="cinema-lobby-tools">' +
+            '<button id="cinema-lobby-test"><i class="fas fa-circle-play"></i><span><b>测试片源</b><small>开场前确认能否播放</small></span><i class="fas fa-chevron-right"></i></button>' +
+            '<button id="cinema-lobby-archive"><i class="fas fa-ticket"></i><span><b>观影档案</b><small>影评、评分与待看清单</small></span><i class="fas fa-chevron-right"></i></button>' +
+        '</div>';
+    }
+    function _bindCinemaLobbyTools() {
+        var test = document.getElementById('cinema-lobby-test');
+        var archive = document.getElementById('cinema-lobby-archive');
+        if (test) test.addEventListener('click', _testVideoSource);
+        if (archive) archive.addEventListener('click', _openArchive);
+    }
+
     // ── 观影沉浸模式：进入/退出（隐藏外层头像条+顶栏，强制暗色）──
     function _enterTheaterMode() {
         var page = document.getElementById('entertainment-page');
@@ -1129,11 +1153,9 @@
             // 不管这轮是梦角一开始就邀请的，还是你邀请梦角、梦角换了时间反弹回来的，
             // 只要是"梦角提议的时间在等你回应"，就用同一套三按钮面板，不用分场景
             bodyHtml =
-                '<div class="cinema-screen-wrap">' +
-                    '<div class="cinema-empty-icon"><i class="fas fa-film"></i></div>' +
-                    '<div class="cinema-empty-text">' + _escapeHtml(partnerName) + '邀你一起看《' + _escapeHtml(_negoState.movieTitle) + '》</div>' +
-                '</div>' +
+                _cinemaLobbyHeroHTML('invited', '《' + _negoState.movieTitle + '》', partnerName + '送来了一张双人电影票') +
                 '<div class="cinema-invite-response-card">' +
+                    '<div class="cinema-invite-response-label"><i class="fas fa-envelope-open-text"></i> 待回应的观影邀请</div>' +
                     '<div class="cinema-invite-response-time">' + _escapeHtml(_negoState.dateStr) + '  ' + _escapeHtml(_negoState.timeStr) + '</div>' +
                     '<div class="cinema-invite-response-actions">' +
                         '<button class="cinema-invite-resp-btn cinema-invite-resp-btn--secondary" id="cinema-resp-reschedule">更换时间</button>' +
@@ -1143,19 +1165,16 @@
                         '<button class="cinema-invite-resp-btn cinema-invite-resp-btn--decline" id="cinema-resp-decline">拒绝</button>' +
                         '<button class="cinema-invite-resp-btn cinema-invite-resp-btn--primary" id="cinema-resp-accept">同意</button>' +
                     '</div>' +
-                '</div>';
+                '</div>' + _cinemaLobbyToolsHTML();
         } else {
             var emptyText = negoActive ? ('邀请已发出，等' + _escapeHtml(partnerName) + '回主聊天里的消息～') : '还没有约定观影';
             var btnHtml = negoActive
                 ? '<button class="cinema-invite-btn" id="cinema-invite-btn" disabled>等待' + _escapeHtml(partnerName) + '回复中…</button>' +
                   '<button class="cinema-cancel-invite-btn" id="cinema-cancel-invite-btn">取消邀请</button>'
                 : '<button class="cinema-invite-btn" id="cinema-invite-btn">邀请' + _escapeHtml(partnerName) + '一起观影</button>';
-            bodyHtml =
-                '<div class="cinema-screen-wrap">' +
-                    '<div class="cinema-empty-icon"><i class="fas fa-film"></i></div>' +
-                    '<div class="cinema-empty-text">' + emptyText + '</div>' +
-                '</div>' +
-                btnHtml;
+            bodyHtml = _cinemaLobbyHeroHTML(negoActive ? 'pending' : 'idle', negoActive ? '邀请正在穿过银幕' : '两个人的放映厅', emptyText) +
+                '<div class="cinema-lobby-ticket"><span><i class="fas fa-film"></i> TONIGHT CINEMA</span><b>' + (negoActive ? '等待回应' : '尚未选片') + '</b><small>' + (negoActive ? '对方回复后会自动更新约定状态' : '先发出邀请，再一起决定影片与时间') + '</small></div>' +
+                btnHtml + _cinemaLobbyToolsHTML();
         }
 
         panel.innerHTML = _hdHTML() + '<div class="cinema-body">' + bodyHtml + '</div>';
@@ -1171,6 +1190,7 @@
             document.getElementById('cinema-cancel-invite-btn').addEventListener('click', _negoCancelInvite);
         }
         document.getElementById('cinema-archive-btn').addEventListener('click', _openArchive);
+        _bindCinemaLobbyTools();
     }
 
     // ── 渲染：有约定（等待中）────────────────────────────
@@ -1184,11 +1204,7 @@
         panel.innerHTML =
             _hdHTML() +
             '<div class="cinema-body">' +
-                '<div class="cinema-screen-wrap">' +
-                    '<div class="cinema-waiting-icon"><i class="fas fa-film"></i></div>' +
-                    '<div class="cinema-waiting-movie">' + _escapeHtml(_fakeAppt.movieTitle) + '</div>' +
-                    '<div class="cinema-waiting-sub">' + (locked ? '待到观影时间' : '时间已到，可以选片开始了') + '</div>' +
-                '</div>' +
+                _cinemaLobbyHeroHTML(locked ? 'waiting' : 'ready', '《' + _fakeAppt.movieTitle + '》', locked ? '电影票已经收好，等待约定时间开场' : '放映厅已经亮起，可以选片入场了') +
                 '<div class="cinema-appt-card">' +
                     '<div class="cinema-appt-badge">待观影</div>' +
                     '<div class="cinema-appt-movie">' + _escapeHtml(_fakeAppt.movieTitle) + '</div>' +
@@ -1199,7 +1215,7 @@
                     '</div>' +
                     (locked ? '<div class="cinema-appt-countdown">' + _countdownText() + '后可选择影片</div>' : '') +
                     '<button type="button" class="cinema-test-source-link" id="cinema-waiting-test-source">先测试一下片源？</button>' +
-                '</div>' +
+                '</div>' + _cinemaLobbyToolsHTML() +
             '</div>';
 
         document.getElementById('cinema-waiting-test-source').addEventListener('click', _testVideoSource);
@@ -1235,6 +1251,7 @@
             });
         }
         document.getElementById('cinema-archive-btn').addEventListener('click', _openArchive);
+        _bindCinemaLobbyTools();
 
         // 未到时间：定时轮询，一旦解锁自动刷新按钮态
         _clearWaitTimer();

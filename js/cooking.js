@@ -24,6 +24,13 @@
     const stepNames = { add: '加入食材', heat: '热锅', boil: '煮', steam: '蒸', stirFry: '翻炒', season: '调味', serve: '出锅' };
     const heatNames = { high: '大火', medium: '中火', low: '小火' };
     const modeNames = { solo_user: '独自料理', solo_partner: '对方料理', together: '一起料理' };
+    const partnerSkillLevels = {
+        beginner: { name: '厨房新手', rate: .62, icon: '🥣', note: '动作容易出错，但偶尔也会超常发挥。' },
+        casual: { name: '偶尔下厨', rate: .76, icon: '🍳', note: '会做一些家常菜，复杂步骤不太稳定。' },
+        steady: { name: '稳定发挥', rate: .88, icon: '🥘', note: '大部分步骤都能处理得很好。' },
+        skilled: { name: '很会做饭', rate: .95, icon: '🧑‍🍳', note: '动作熟练，只有少数时候会失手。' },
+        master: { name: '几乎不会失手', rate: .99, icon: '✨', note: '最高档，每个步骤仍保留1%的失败可能。' }
+    };
     const SESSION_VERSION = 1;
 
     let ingredients = [];
@@ -45,6 +52,7 @@
     let managerTab = 'list';
     let managerDraft = null;
     let globalAssets = { myGood: '', myBad: '', partnerGood: '', partnerBad: '' };
+    let partnerCookingSkill = 'master';
     let selectedTasteMessageId = null;
     let selectedTasteStars = 0;
     let timers = { auto: null, clock: null, hold: null, stirPrompt: null, toast: null };
@@ -111,6 +119,8 @@
         customIngredients = await readStore('customIngredients', []);
         customRecipes = await readStore('customRecipes', []);
         globalAssets = Object.assign(globalAssets, await readStore('globalAssets', {}));
+        partnerCookingSkill = await readStore('partnerCookingSkill', 'master');
+        if (!partnerSkillLevels[partnerCookingSkill]) partnerCookingSkill = 'master';
         history = await readStore('history', []);
         session = await readStore('session', null);
         ingredients = mergeById(baseIngredients, customIngredients);
@@ -158,7 +168,7 @@
         manager.id = 'cook-manager-modal';
         manager.className = 'modal';
         manager.innerHTML = `<div class="modal-content cook-manager"><div class="modal-title"><i class="fas fa-book-open"></i><span>菜谱管理</span></div>
-            <div class="cook-manager-tabs"><button data-manager-tab="list" class="active">菜谱</button><button data-manager-tab="edit">新建菜谱</button><button data-manager-tab="ingredients">食材库</button><button data-manager-tab="assets">结算图片</button></div>
+            <div class="cook-manager-tabs"><button data-manager-tab="list" class="active">菜谱</button><button data-manager-tab="edit">新建菜谱</button><button data-manager-tab="ingredients">食材库</button><button data-manager-tab="assets">结算图片</button><button data-manager-tab="skill">梦角厨艺</button></div>
             <div class="cook-manager-body" id="cook-manager-body"></div>
             <div class="modal-buttons"><button class="modal-btn modal-btn-secondary" id="cook-import-btn">导入 JSON</button><button class="modal-btn modal-btn-secondary" id="cook-export-btn">导出 JSON</button><button class="modal-btn modal-btn-secondary" id="cook-manager-close">关闭</button></div>
             <input type="file" id="cook-json-input" accept="application/json,.json" hidden></div>`;
@@ -264,7 +274,7 @@
                 <button class="cook-mode-card ${live ? 'live' : ''}" data-cook-mode="${live ? 'watch' : 'invite_partner'}" ${pendingResult?'disabled':''}><i class="fas fa-eye"></i><b>${live ? getPartnerName() + '正在做饭' : '邀请对方做'}</b><small>${live ? '料理已经开始，可以进去围观。' : '邀请对方掌勺，你只能围观和发表情。'}</small></button>
                 <button class="cook-mode-card" data-cook-mode="together" ${pendingResult?'disabled':''}><i class="fas fa-hands"></i><b>一起做</b><small>每张完整操作卡轮流完成。</small></button>
             </div>
-            <div class="cook-home-tools"><button id="cook-browse-recipes"><i class="fas fa-book"></i> 菜谱</button><button id="cook-open-manager"><i class="fas fa-sliders"></i> 菜谱管理</button><button id="cook-open-history"><i class="fas fa-utensils"></i> 我们的厨房</button></div>`);
+            <div class="cook-home-tools"><button id="cook-browse-recipes"><i class="fas fa-book"></i> 菜谱</button><button id="cook-open-manager"><i class="fas fa-sliders"></i> 菜谱管理</button><button id="cook-open-skill"><i class="fas fa-kitchen-set"></i> 梦角厨艺</button><button id="cook-open-history"><i class="fas fa-utensils"></i> 我们的厨房</button></div>`);
         $('cook-resume')?.addEventListener('click', renderStage);
         $('cook-pending-view')?.addEventListener('click', renderResult);
         $('cook-pending-send')?.addEventListener('click', () => sendResultToChat(false));
@@ -277,6 +287,7 @@
         }));
         $('cook-browse-recipes')?.addEventListener('click', () => { pendingMode = 'browse'; renderRecipeList(); });
         $('cook-open-manager')?.addEventListener('click', openManager);
+        $('cook-open-skill')?.addEventListener('click', openPartnerSkillSettings);
         $('cook-open-history')?.addEventListener('click', renderHistory);
     }
 
@@ -361,7 +372,10 @@
         session.metrics[name].push(clamp(Math.round(score), 0, 100));
     }
     function avg(values, fallback) { return values && values.length ? values.reduce((a,b)=>a+b,0)/values.length : fallback; }
-    function partnerStepScore() { return Math.random() < .99 ? Math.round(rand(96,101)) : Math.round(rand(42,76)); }
+    function partnerStepScore() {
+        const level = partnerSkillLevels[partnerCookingSkill] || partnerSkillLevels.master;
+        return Math.random() < Math.min(.99, level.rate) ? Math.round(rand(90, 100)) : Math.round(rand(30, 85));
+    }
     function activeOwner() {
         if (!session) return 'user';
         if (session.mode === 'solo_partner') return 'partner';
@@ -895,7 +909,15 @@
     function openManager(){
         managerTab='list';managerDraft=null;document.querySelectorAll('[data-manager-tab]').forEach(btn=>btn.classList.toggle('active',btn.dataset.managerTab==='list'));renderManager();if(typeof showModal==='function')showModal($('cook-manager-modal'));else $('cook-manager-modal').style.display='flex';
     }
-    function renderManager(){if(managerTab==='list')renderRecipeManagerList();else if(managerTab==='edit')renderRecipeEditor();else if(managerTab==='ingredients')renderIngredientManager();else renderGlobalAssetManager();}
+    function renderManager(){if(managerTab==='list')renderRecipeManagerList();else if(managerTab==='edit')renderRecipeEditor();else if(managerTab==='ingredients')renderIngredientManager();else if(managerTab==='assets')renderGlobalAssetManager();else renderPartnerSkillManager();}
+    function openPartnerSkillSettings(){
+        managerTab='skill';managerDraft=null;document.querySelectorAll('[data-manager-tab]').forEach(btn=>btn.classList.toggle('active',btn.dataset.managerTab==='skill'));renderManager();if(typeof showModal==='function')showModal($('cook-manager-modal'));else $('cook-manager-modal').style.display='flex';
+    }
+    function renderPartnerSkillManager(){
+        const current=partnerSkillLevels[partnerCookingSkill]||partnerSkillLevels.master;
+        $('cook-manager-body').innerHTML=`<div class="cook-skill-head"><span>${current.icon}</span><div><div class="cook-kicker">PARTNER COOKING SKILL</div><h3>${escapeHtml(getPartnerName())}的厨艺</h3><p>只影响对方负责的步骤；所有结果仍由随机概率决定。</p></div></div><div class="cook-skill-grid">${Object.entries(partnerSkillLevels).map(([key,level])=>`<button class="cook-skill-card ${key===partnerCookingSkill?'active':''}" data-cook-skill="${key}"><span>${level.icon}</span><div><b>${level.name}</b><small>${level.note}</small><i><em style="width:${Math.round(level.rate*100)}%"></em></i><strong>步骤成功率 ${Math.round(level.rate*100)}%</strong></div></button>`).join('')}</div><div class="cook-skill-note"><i class="fas fa-circle-info"></i><span>成功率按每个操作分别判定。最高档也不会达到100%，因此仍可能偶尔做坏。</span></div>`;
+        document.querySelectorAll('[data-cook-skill]').forEach(btn=>btn.addEventListener('click',()=>{partnerCookingSkill=btn.dataset.cookSkill;writeStore('partnerCookingSkill',partnerCookingSkill);renderPartnerSkillManager();notify('梦角厨艺已调整为“'+partnerSkillLevels[partnerCookingSkill].name+'”','success');}));
+    }
     function renderRecipeManagerList(){
         $('cook-manager-body').innerHTML=`<button class="cook-primary" id="cook-new-recipe"><i class="fas fa-plus"></i> 新建菜谱</button><div class="cook-builder-list">${recipes.map(r=>`<div class="cook-manager-list-row"><span>${r.assets?.dish?'🖼️':'🍲'}</span><div><b>${escapeHtml(r.name)}</b><small>${escapeHtml(r.category||'其他')} · ${r.ingredients.length} 种食材 · ${r.steps.length} 步</small></div><button data-edit-recipe="${escapeHtml(r.id)}"><i class="fas fa-pen"></i></button>${customRecipes.some(x=>x.id===r.id)?`<button data-delete-recipe="${escapeHtml(r.id)}"><i class="fas fa-trash"></i></button>`:''}</div>`).join('')}</div>`;
         $('cook-new-recipe')?.addEventListener('click',()=>{managerDraft=freshRecipe();managerTab='edit';document.querySelectorAll('[data-manager-tab]').forEach(btn=>btn.classList.toggle('active',btn.dataset.managerTab==='edit'));renderManager();});
@@ -938,10 +960,10 @@
         document.querySelectorAll('[data-clear-asset]').forEach(btn=>btn.addEventListener('click',()=>{globalAssets[btn.dataset.clearAsset]='';writeStore('globalAssets',globalAssets);renderGlobalAssetManager();}));
     }
     function exportConfigs(){
-        const blob=new Blob([JSON.stringify({format:'chuanxun-cooking-v2',globalAssets,ingredients:customIngredients,recipes:customRecipes},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='chuanxun-cooking-recipes.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+        const blob=new Blob([JSON.stringify({format:'chuanxun-cooking-v2',globalAssets,partnerCookingSkill,ingredients:customIngredients,recipes:customRecipes},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='chuanxun-cooking-recipes.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
     }
     function importConfigs(event){
-        const file=event.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result),newRecipes=Array.isArray(data)?data:(data.recipes||[]),newIngredients=Array.isArray(data.ingredients)?data.ingredients:[];if(data.globalAssets){globalAssets=Object.assign(globalAssets,data.globalAssets);writeStore('globalAssets',globalAssets);}newIngredients.forEach(item=>{customIngredients=customIngredients.filter(x=>x.id!==item.id);customIngredients.push(item);});newRecipes.forEach(item=>{customRecipes=customRecipes.filter(x=>x.id!==item.id);customRecipes.push(item);});ingredients=mergeById(baseIngredients,customIngredients);recipes=mergeById(baseRecipes,customRecipes);writeStore('customIngredients',customIngredients);writeStore('customRecipes',customRecipes);notify('菜谱 JSON 已导入','success');renderManager();}catch(error){notify('JSON 格式不正确','error');}};reader.readAsText(file);event.target.value='';
+        const file=event.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result),newRecipes=Array.isArray(data)?data:(data.recipes||[]),newIngredients=Array.isArray(data.ingredients)?data.ingredients:[];if(data.globalAssets){globalAssets=Object.assign(globalAssets,data.globalAssets);writeStore('globalAssets',globalAssets);}if(data.partnerCookingSkill&&partnerSkillLevels[data.partnerCookingSkill]){partnerCookingSkill=data.partnerCookingSkill;writeStore('partnerCookingSkill',partnerCookingSkill);}newIngredients.forEach(item=>{customIngredients=customIngredients.filter(x=>x.id!==item.id);customIngredients.push(item);});newRecipes.forEach(item=>{customRecipes=customRecipes.filter(x=>x.id!==item.id);customRecipes.push(item);});ingredients=mergeById(baseIngredients,customIngredients);recipes=mergeById(baseRecipes,customRecipes);writeStore('customIngredients',customIngredients);writeStore('customRecipes',customRecipes);notify('菜谱 JSON 已导入','success');renderManager();}catch(error){notify('JSON 格式不正确','error');}};reader.readAsText(file);event.target.value='';
     }
 
     function showCookingToast(title,sub,showButton){

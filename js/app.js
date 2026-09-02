@@ -1276,6 +1276,7 @@ const loadData = async () => {
             applyAllAvatarFrames();
             manageAutoSendTimer(); 
             checkEnvelopeStatus(); 
+            checkSpacetimeLetters();
             updateUI();
             if (settings.customBubbleCss) {
                 try { applyCustomBubbleCss(settings.customBubbleCss); } catch(e) {}
@@ -4305,6 +4306,55 @@ function saveEnvelopeData() {
     localforage.setItem(getStorageKey('envelopeData'), envelopeData);
 }
 
+const SPACETIME_LETTER_ROLL_MS = 3 * 60 * 60 * 1000;
+const SPACETIME_LETTER_CHANCE = 0.018;
+let spacetimeLetterTimer = null;
+
+function envelopeDayKey(timestamp) {
+    const date = new Date(timestamp || Date.now());
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+async function checkSpacetimeLetters() {
+    await loadEnvelopeData();
+    const pool = Array.isArray(customReplies) ? customReplies.filter(text => String(text || '').trim()) : [];
+    if (!pool.length) return;
+    const stateKey = getStorageKey('spacetimeLetterRollState');
+    const now = Date.now();
+    const state = await localforage.getItem(stateKey) || { lastRollAt: 0 };
+    const elapsed = state.lastRollAt ? now - Number(state.lastRollAt) : SPACETIME_LETTER_ROLL_MS;
+    const slots = Math.min(8, Math.floor(elapsed / SPACETIME_LETTER_ROLL_MS));
+    if (slots < 1) {
+        if (!spacetimeLetterTimer) spacetimeLetterTimer = setInterval(checkSpacetimeLetters, 20 * 60 * 1000);
+        return;
+    }
+    state.lastRollAt = now;
+    const today = envelopeDayKey(now);
+    let todayCount = envelopeData.inbox.filter(letter => letter.type === 'spacetime' && envelopeDayKey(letter.receivedTime) === today).length;
+    const generated = [];
+    for (let i = 0; i < slots && todayCount < 2; i++) {
+        if (Math.random() >= SPACETIME_LETTER_CHANCE) continue;
+        const content = generateEnvelopeReplyText();
+        if (!content) continue;
+        const letter = {
+            id: 'spacetime_' + now + '_' + Math.random().toString(36).slice(2, 6),
+            type: 'spacetime', content, originalContent: '', receivedTime: Date.now(), isNew: true
+        };
+        envelopeData.inbox.push(letter); generated.push(letter); todayCount++;
+        if (generated.length >= 2) break;
+    }
+    await localforage.setItem(stateKey, state);
+    if (generated.length) {
+        saveEnvelopeData(); renderEnvelopeLists(); playSound('message');
+        showEnvelopeReplyPopup(generated[generated.length - 1]);
+    }
+    if (!spacetimeLetterTimer) spacetimeLetterTimer = setInterval(checkSpacetimeLetters, 20 * 60 * 1000);
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) checkSpacetimeLetters();
+});
+
 async function checkEnvelopeStatus() {
     await loadEnvelopeData();
     const now = Date.now();
@@ -4341,13 +4391,14 @@ function showEnvelopeReplyPopup(letter) {
     const popup = document.createElement('div');
     popup.id = 'envelope-reply-popup';
     popup.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--secondary-bg);border:1px solid var(--border-color);border-radius:20px;padding:18px 20px;z-index:8000;max-width:320px;width:88%;box-shadow:0 8px 32px rgba(0,0,0,0.18);display:flex;flex-direction:column;gap:12px;animation:slideUpNotif 0.4s cubic-bezier(0.22,1,0.36,1);';
+    const isSpacetime = letter && letter.type === 'spacetime';
     popup.innerHTML = `
         <style>@keyframes slideUpNotif{from{opacity:0;transform:translateX(-50%) translateY(24px) scale(0.9)}60%{transform:translateX(-50%) translateY(-4px) scale(1.02)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}</style>
         <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-size:26px;">💌</span>
+            <span style="font-size:26px;">${isSpacetime ? '✉️' : '💌'}</span>
             <div>
-                <div style="font-size:14px;font-weight:700;color:var(--text-primary);">收到了一封回信</div>
-                <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;opacity:0.8;">Ta 给你写了回信，快去看看吧~</div>
+                <div style="font-size:14px;font-weight:700;color:var(--text-primary);">${isSpacetime ? '收到一封时空来信' : '收到了一封回信'}</div>
+                <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;opacity:0.8;">${isSpacetime ? (((typeof settings !== 'undefined' && settings.partnerName) || '对方') + '忽然写来了一封信。') : 'Ta 给你写了回信，快去看看吧~'}</div>
             </div>
         </div>
         <div style="display:flex;gap:8px;">
@@ -4409,7 +4460,8 @@ window.openEnvelopeAndViewReply = function(replyId) {
 };
 
 function generateEnvelopeReplyText() {
-    const sourcePool = [...customReplies];
+    const sourcePool = Array.isArray(customReplies) ? customReplies.filter(text => String(text || '').trim()) : [];
+    if (!sourcePool.length) return '';
     const sentenceCount = Math.floor(Math.random() * (12 - 8 + 1)) + 8;
     let replyContent = "";
     for (let i = 0; i < sentenceCount; i++) {
@@ -4503,12 +4555,13 @@ function renderInboxList() {
         const preview = letter.content.length > 50 ? letter.content.substring(0, 50) + '…' : letter.content;
         const isNew = letter.isNew;
         const origPreview = letter.originalContent ? (letter.originalContent.length > 32 ? letter.originalContent.substring(0, 32) + '…' : letter.originalContent) : '';
+        const isSpacetime = letter.type === 'spacetime';
         return `
         <div class="env-letter-item reply ${isNew ? 'env-letter-new' : ''}" onclick="viewEnvLetter('inbox','${letter.id}')">
             <div class="env-letter-header">
                 <div class="env-letter-header-from">
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:3px;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>
-                    收到 · ${date}
+                    ${isSpacetime ? '时空来信' : '收到'} · ${date}
                     ${isNew ? '<span style="background:rgba(255,255,255,0.3);color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;margin-left:6px;">新</span>' : ''}
                 </div>
                 <div class="env-stamp">
@@ -4538,9 +4591,9 @@ window.viewEnvLetter = function(section, id) {
     editingEnvId = id;
     editingEnvSection = section;
 
-    document.getElementById('env-view-title').textContent = section === 'outbox' ? '寄出的信' : '收到的回信';
+    document.getElementById('env-view-title').textContent = section === 'outbox' ? '寄出的信' : (letter.type === 'spacetime' ? '时空来信' : '收到的回信');
 
-    const dateObj = letter.timestamp ? new Date(letter.timestamp) : new Date();
+    const dateObj = new Date(letter.timestamp || letter.receivedTime || letter.sentTime || Date.now());
     const y = dateObj.getFullYear();
     const mo = String(dateObj.getMonth()+1).padStart(2,'0');
     const d = String(dateObj.getDate()).padStart(2,'0');
@@ -4563,7 +4616,7 @@ window.viewEnvLetter = function(section, id) {
     } else {
         const myName = (typeof settings !== 'undefined' && settings.myName) || '你';
         if (toLine) toLine.textContent = `致 ${myName}：`;
-        if (greetingLine) greetingLine.textContent = '见字如面，一切皆好。';
+        if (greetingLine) greetingLine.textContent = letter.type === 'spacetime' ? '此刻忽然想写信给你。' : '见字如面，一切皆好。';
     }
 
     const textEl = document.getElementById('env-view-text');
@@ -15813,6 +15866,7 @@ autoSendSlider.addEventListener('change', () => {
             hideModal(DOMElements.advancedModal.modal);
             await loadEnvelopeData();
             await checkEnvelopeStatus();
+            await checkSpacetimeLetters();
             currentEnvTab = 'outbox';
             document.getElementById('env-tab-outbox').classList.add('active');
             document.getElementById('env-tab-inbox').classList.remove('active');
@@ -19605,7 +19659,9 @@ document.getElementById('reader-minimize-btn')?.addEventListener('click', () => 
 
 // 在DOMContentLoaded中初始化
 document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(initBookshelf, 600);
+    setTimeout(() => {
+        if (!window.EnhancedBookshelf) initBookshelf();
+    }, 600);
 });
 // ==================== 礼物盲盒功能 ====================
 (function() {

@@ -6,7 +6,7 @@
     const STORE_BOOKS = 'userBookshelf';
     const STORE_PREFS = 'readerPreferencesV2';
     const STORE_STATE = 'readerWindowStateV2';
-    const CHAPTER_RE = /^\s*(第[零〇一二三四五六七八九十百千万两0-9]+[章节回卷部篇](?:\s+.{0,36})?|chapter\s+\d+(?:\s*[:：.\-]\s*.*)?|序章|楔子|番外(?:\s+.*)?|后记)\s*$/i;
+    const CHAPTER_RE = /^\s*((?:正文\s*)?第\s*[零〇一二三四五六七八九十百千万两0-9０-９]+\s*[章节回卷部篇](?:\s*[:：、.\-]?\s*.{0,80})?|chapter\s+\d+(?:\s*[:：.\-]?\s*.*)?|序章(?:\s*[:：、.\-]?\s*.*)?|楔子(?:\s*[:：、.\-]?\s*.*)?|番外(?:\s*[:：、.\-]?\s*.*)?|后记(?:\s*[:：、.\-]?\s*.*)?)\s*$/i;
 
     let books = [];
     let prefs = { promptOnLaunch: false, defaultSize: 'half' };
@@ -17,11 +17,14 @@
     let readerFontSize = 15;
     let readerSize = 'half';
     let partnerReading = false;
+    let partnerNextChangeAt = 0;
+    let partnerReadingUntil = 0;
     let readingTick = null;
     let partnerRollTick = null;
     let pendingTick = null;
     let detailBookId = null;
     let detailStars = 0;
+    let readerDrag = null;
 
     const escapeHtml = value => {
         const el = document.createElement('div');
@@ -60,6 +63,17 @@
         book.pendingPartnerComments = Array.isArray(book.pendingPartnerComments) ? book.pendingPartnerComments : [];
         if (!Array.isArray(book.chapters) || !book.chapters.length) {
             book.chapters = buildChapters(String(book.content || ''));
+        } else if (book.chapters.length === 1) {
+            // 兼容旧版本已经导入、但被整体存成“正文”的小说。
+            const oldChapter = book.chapters[0] || {};
+            const detected = buildChapters(String(oldChapter.content || book.content || ''));
+            if (detected.length > 1) {
+                detected[0].userReadSeconds = Number(oldChapter.userReadSeconds) || 0;
+                detected[0].partnerReadSeconds = Number(oldChapter.partnerReadSeconds) || 0;
+                book.chapters = detected;
+                book.currentChapter = 0;
+                book.currentPage = 0;
+            }
         }
         book.chapters = book.chapters.map((chapter, index) => ({
             id: chapter.id || `${book.id}_chapter_${index}`,
@@ -82,9 +96,11 @@
         lines.forEach((raw, index) => {
             const line = raw.trimEnd();
             const markedHeading = paragraphMeta && paragraphMeta[index] && paragraphMeta[index].heading;
-            if ((markedHeading || CHAPTER_RE.test(line.trim())) && line.trim()) {
+            const cleanLine = line.trim();
+            const looksLikeChapter = cleanLine.length <= 100 && CHAPTER_RE.test(cleanLine);
+            if ((markedHeading || looksLikeChapter) && cleanLine) {
                 if (current) chapters.push(current);
-                current = { title: line.trim(), content: '' };
+                current = { title: cleanLine, content: '' };
             } else {
                 if (!current) current = { title: '正文', content: '' };
                 current.content += (current.content ? '\n' : '') + line;
@@ -320,6 +336,7 @@
     }
     function openReader(bookId, chapterIndex) {
         const book = findBook(bookId); if (!book) return;
+        if (!currentBook || String(currentBook.id) !== String(book.id)) stopReadingTimers(true);
         const requestedChapter = chapterIndex == null ? (Number(book.currentChapter) || 0) : (Number(chapterIndex) || 0);
         currentBook = book; currentChapter = Math.max(0, Math.min(requestedChapter, book.chapters.length - 1));
         currentPage = currentChapter === book.currentChapter ? Number(book.currentPage) || 0 : 0;
@@ -361,12 +378,14 @@
         if (!['small', 'half', 'large', 'full'].includes(size)) size = 'half';
         readerSize = size;
         const win = $('reader-window');
+        win.classList.remove('reader-dragged');
+        win.style.removeProperty('--reader-drag-x');
+        win.style.removeProperty('--reader-drag-y');
         win.classList.remove('reader-size-small', 'reader-size-half', 'reader-size-large', 'reader-size-full');
         win.classList.add('reader-size-' + size);
         document.querySelectorAll('[data-reader-size]').forEach(btn => btn.classList.toggle('active', btn.dataset.readerSize === size));
         if (currentBook) currentBook.readerSize = size;
         if (save !== false) { prefs.defaultSize = size; savePrefs(); saveBooks(); saveReaderState(); }
-        if (size === 'small') partnerReading = false; else if (!partnerReading) partnerReading = Math.random() < .42;
         refreshReaderStatus();
     }
     function refreshReaderIdentity() {
@@ -377,9 +396,9 @@
     function refreshReaderStatus() {
         const userReading = !!currentBook && $('reader-window').classList.contains('visible') && readerSize !== 'small';
         $('reader-me-person')?.classList.toggle('reading', userReading);
-        $('reader-partner-person')?.classList.toggle('reading', partnerReading && userReading);
+        $('reader-partner-person')?.classList.toggle('reading', partnerReading);
         if ($('reader-me-status')) $('reader-me-status').textContent = userReading ? '阅读中' : '';
-        if ($('reader-partner-status')) $('reader-partner-status').textContent = partnerReading && userReading ? '阅读中' : '';
+        if ($('reader-partner-status')) $('reader-partner-status').textContent = partnerReading ? '阅读中' : '';
         $('reader-together-bar')?.classList.toggle('linked', partnerReading && userReading);
     }
     function saveReaderState() {
@@ -387,11 +406,15 @@
         currentBook.currentChapter = currentChapter; currentBook.currentPage = currentPage; currentBook.readerFontSize = readerFontSize; currentBook.readerSize = readerSize;
         saveBooks(); writeStore(STORE_STATE, { bookId: currentBook.id, chapter: currentChapter, page: currentPage, fontSize: readerFontSize, size: readerSize, ts: Date.now() });
     }
-    function closeReader() {
-        saveReaderState(); stopReadingTimers(); $('reader-window').classList.remove('visible'); $('reader-mini-pill').classList.remove('visible'); partnerReading = false; refreshReaderStatus(); currentBook = null;
+    function closeReader(returnToShelf) {
+        saveReaderState(); stopReadingTimers(true); $('reader-window').classList.remove('visible'); $('reader-mini-pill').classList.remove('visible'); refreshReaderStatus(); currentBook = null;
+        if (returnToShelf !== false) {
+            renderBookshelf();
+            if (typeof showModal === 'function') showModal($('bookshelf-modal')); else $('bookshelf-modal').style.display = 'flex';
+        }
     }
     function minimizeReader() {
-        if (!currentBook) return; saveReaderState(); stopReadingTimers(); $('reader-window').classList.remove('visible'); $('reader-mini-pill').classList.add('visible');
+        if (!currentBook) return; saveReaderState(); $('reader-window').classList.remove('visible'); $('reader-mini-pill').classList.add('visible');
         $('reader-mini-title').textContent = currentBook.name; $('reader-mini-page').textContent = `${currentBook.chapters[currentChapter].title} · ${currentPage + 1}/${readerPages.length}`;
     }
     function restoreReader() {
@@ -399,25 +422,87 @@
     }
 
     function startReadingTimers() {
-        stopReadingTimers();
-        partnerReading = readerSize !== 'small' && Math.random() < .46;
+        if (readingTick) return;
+        if (!partnerNextChangeAt) planPartnerReadingChange(true);
         readingTick = setInterval(() => {
-            if (!currentBook || !$('reader-window').classList.contains('visible') || readerSize === 'small') return;
-            const chapter = currentBook.chapters[currentChapter]; chapter.userReadSeconds = (Number(chapter.userReadSeconds) || 0) + 1;
+            if (!currentBook) return;
+            const chapter = currentBook.chapters[currentChapter];
+            const userReading = $('reader-window').classList.contains('visible') && readerSize !== 'small';
+            if (userReading) chapter.userReadSeconds = (Number(chapter.userReadSeconds) || 0) + 1;
+            updatePartnerReading(Date.now());
             if (partnerReading) {
                 chapter.partnerReadSeconds = (Number(chapter.partnerReadSeconds) || 0) + 1;
                 if (chapter.partnerReadSeconds >= 15 && !chapter.partnerCommentRolled) schedulePartnerComments(currentBook, currentChapter);
             }
-            if (chapter.userReadSeconds % 5 === 0) saveReaderState();
+            if ((userReading || partnerReading) && (chapter.userReadSeconds + chapter.partnerReadSeconds) % 5 === 0) saveReaderState();
         }, 1000);
-        partnerRollTick = setInterval(() => {
-            if (!currentBook || readerSize === 'small') return;
-            if (partnerReading) { if (Math.random() < .16) partnerReading = false; }
-            else if (Math.random() < .28) partnerReading = true;
-            refreshReaderStatus();
-        }, 30000 + Math.floor(Math.random() * 25000));
     }
-    function stopReadingTimers() { clearInterval(readingTick); clearInterval(partnerRollTick); readingTick = null; partnerRollTick = null; }
+    function planPartnerReadingChange(soon) {
+        const now = Date.now();
+        if (partnerReading) {
+            partnerReadingUntil = now + (25 + Math.random() * 125) * 1000;
+            partnerNextChangeAt = partnerReadingUntil;
+        } else {
+            partnerNextChangeAt = now + (soon ? 4 + Math.random() * 24 : 18 + Math.random() * 105) * 1000;
+        }
+    }
+    function updatePartnerReading(now) {
+        if (!currentBook || now < partnerNextChangeAt) return;
+        if (partnerReading) {
+            partnerReading = false;
+            partnerReadingUntil = 0;
+            showPartnerReadingNotice(false);
+            planPartnerReadingChange(false);
+        } else if (Math.random() < .48) {
+            partnerReading = true;
+            showPartnerReadingNotice(true);
+            planPartnerReadingChange(false);
+        } else {
+            planPartnerReadingChange(false);
+        }
+        refreshReaderStatus();
+    }
+    function showPartnerReadingNotice(joined) {
+        const bar = $('reader-together-bar');
+        if (!bar || !$('reader-window')?.classList.contains('visible')) return;
+        bar.querySelector('.reader-together-toast')?.remove();
+        const toast = document.createElement('div');
+        toast.className = 'reader-together-toast';
+        toast.innerHTML = `<span>${avatarHtml(true)}</span><b>${escapeHtml(partnerName())}${joined ? '来一起看书了' : '暂时离开了阅读'}</b>`;
+        bar.appendChild(toast);
+        setTimeout(() => toast.remove(), 3200);
+    }
+    function stopReadingTimers(resetPartner) {
+        clearInterval(readingTick); clearInterval(partnerRollTick); readingTick = null; partnerRollTick = null;
+        if (resetPartner) { partnerReading = false; partnerNextChangeAt = 0; partnerReadingUntil = 0; }
+    }
+
+    function bindReaderDrag() {
+        const header = $('reader-header'), win = $('reader-window');
+        if (!header || !win) return;
+        header.addEventListener('pointerdown', event => {
+            if (readerSize === 'full' || event.button !== 0 || event.target.closest('button,.reader-size-controls,.reader-font-controls')) return;
+            const rect = win.getBoundingClientRect();
+            readerDrag = { id: event.pointerId, dx: event.clientX - rect.left, dy: event.clientY - rect.top };
+            header.setPointerCapture?.(event.pointerId);
+            win.classList.add('reader-dragged');
+            event.preventDefault();
+        });
+        header.addEventListener('pointermove', event => {
+            if (!readerDrag || readerDrag.id !== event.pointerId) return;
+            const rect = win.getBoundingClientRect();
+            const left = Math.max(0, Math.min(window.innerWidth - rect.width, event.clientX - readerDrag.dx));
+            const top = Math.max(0, Math.min(window.innerHeight - Math.min(rect.height, 80), event.clientY - readerDrag.dy));
+            win.style.setProperty('--reader-drag-x', left + 'px');
+            win.style.setProperty('--reader-drag-y', top + 'px');
+        });
+        const finish = event => {
+            if (!readerDrag || (event && readerDrag.id !== event.pointerId)) return;
+            readerDrag = null;
+        };
+        header.addEventListener('pointerup', finish);
+        header.addEventListener('pointercancel', finish);
+    }
     function schedulePartnerComments(book, chapterIndex) {
         const chapter = book.chapters[chapterIndex]; if (!chapter || chapter.partnerCommentRolled) return;
         chapter.partnerCommentRolled = true;
@@ -490,6 +575,7 @@
             if (event.key === 'ArrowLeft' || event.key === 'PageUp') { event.preventDefault(); readerPrev(); }
             if (event.key === 'Escape') closeReader();
         });
+        bindReaderDrag();
     }
 
     async function init() {

@@ -4454,8 +4454,10 @@ window.openEnvelopeAndViewReply = function(replyId) {
     const envelopeModal = document.getElementById('envelope-modal');
     showModal(envelopeModal);
     setTimeout(() => {
-        switchEnvTab('inbox');
-        viewEnvLetter('inbox', replyId);
+        const letter = envelopeData.inbox.find(item => item.id === replyId);
+        const section = letter && letter.type === 'spacetime' ? 'spacetime' : 'inbox';
+        switchEnvTab(section);
+        viewEnvLetter(section, replyId);
     }, 200);
 };
 
@@ -4477,8 +4479,10 @@ window.switchEnvTab = function(tab) {
     currentEnvTab = tab;
     document.getElementById('env-tab-outbox').classList.toggle('active', tab === 'outbox');
     document.getElementById('env-tab-inbox').classList.toggle('active', tab === 'inbox');
+    document.getElementById('env-tab-spacetime').classList.toggle('active', tab === 'spacetime');
     document.getElementById('env-outbox-section').style.display = tab === 'outbox' ? 'block' : 'none';
     document.getElementById('env-inbox-section').style.display = tab === 'inbox' ? 'block' : 'none';
+    document.getElementById('env-spacetime-section').style.display = tab === 'spacetime' ? 'block' : 'none';
     document.getElementById('env-compose-form').style.display = 'none';
     document.getElementById('env-main-close-btn').style.display = 'flex';
     renderEnvelopeLists();
@@ -4487,14 +4491,18 @@ window.switchEnvTab = function(tab) {
 function renderEnvelopeLists() {
     renderOutboxList();
     renderInboxList();
+    renderSpacetimeList();
     const pendingCount = envelopeData.outbox.filter(l => l.status === 'pending').length;
-    const newInboxCount = envelopeData.inbox.filter(l => l.isNew).length;
+    const newInboxCount = envelopeData.inbox.filter(l => l.type !== 'spacetime' && l.isNew).length;
+    const newSpacetimeCount = envelopeData.inbox.filter(l => l.type === 'spacetime' && l.isNew).length;
     const outboxBadge = document.getElementById('env-outbox-badge');
     const inboxBadge = document.getElementById('env-inbox-badge');
+    const spacetimeBadge = document.getElementById('env-spacetime-badge');
     if (outboxBadge) { outboxBadge.textContent = pendingCount; outboxBadge.style.display = pendingCount > 0 ? 'inline-block' : 'none'; }
     if (inboxBadge) { inboxBadge.textContent = newInboxCount; inboxBadge.style.display = newInboxCount > 0 ? 'inline-block' : 'none'; }
+    if (spacetimeBadge) { spacetimeBadge.textContent = newSpacetimeCount; spacetimeBadge.style.display = newSpacetimeCount > 0 ? 'inline-block' : 'none'; }
     const envelopeEntryBadge = document.getElementById('env-entry-badge');
-    if (envelopeEntryBadge) { envelopeEntryBadge.style.display = newInboxCount > 0 ? 'inline-block' : 'none'; }
+    if (envelopeEntryBadge) { envelopeEntryBadge.style.display = newInboxCount + newSpacetimeCount > 0 ? 'inline-block' : 'none'; }
 }
 
 function renderOutboxList() {
@@ -4542,7 +4550,8 @@ function renderOutboxList() {
 function renderInboxList() {
     const list = document.getElementById('env-inbox-list');
     if (!list) return;
-    if (envelopeData.inbox.length === 0) {
+    const letters = envelopeData.inbox.filter(letter => letter.type !== 'spacetime');
+    if (letters.length === 0) {
         list.innerHTML = `<div class="env-empty">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/><polyline points="22 13 12 13"/><path d="M19 16l-5-3-5 3"/></svg>
             <div style="font-size:14px;font-weight:500;margin-top:4px;">还没有收到回信</div>
@@ -4550,18 +4559,17 @@ function renderInboxList() {
         </div>`;
         return;
     }
-    list.innerHTML = envelopeData.inbox.slice().reverse().map(letter => {
+    list.innerHTML = letters.slice().reverse().map(letter => {
         const date = new Date(letter.receivedTime).toLocaleDateString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
         const preview = letter.content.length > 50 ? letter.content.substring(0, 50) + '…' : letter.content;
         const isNew = letter.isNew;
         const origPreview = letter.originalContent ? (letter.originalContent.length > 32 ? letter.originalContent.substring(0, 32) + '…' : letter.originalContent) : '';
-        const isSpacetime = letter.type === 'spacetime';
         return `
         <div class="env-letter-item reply ${isNew ? 'env-letter-new' : ''}" onclick="viewEnvLetter('inbox','${letter.id}')">
             <div class="env-letter-header">
                 <div class="env-letter-header-from">
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:3px;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>
-                    ${isSpacetime ? '时空来信' : '收到'} · ${date}
+                    收到 · ${date}
                     ${isNew ? '<span style="background:rgba(255,255,255,0.3);color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;margin-left:6px;">新</span>' : ''}
                 </div>
                 <div class="env-stamp">
@@ -4579,11 +4587,37 @@ function renderInboxList() {
     }).join('');
 }
 
+function renderSpacetimeList() {
+    const list = document.getElementById('env-spacetime-list');
+    if (!list) return;
+    const letters = envelopeData.inbox.filter(letter => letter.type === 'spacetime');
+    if (!letters.length) {
+        list.innerHTML = `<div class="env-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="M5 5l2 2M19 5l-2 2"/></svg>
+            <div style="font-size:14px;font-weight:500;margin-top:4px;">还没有收到时空来信</div>
+            <div style="font-size:12px;margin-top:6px;opacity:0.6;">它不会按时出现，也许会在某个意外的时刻抵达。</div>
+        </div>`;
+        return;
+    }
+    list.innerHTML = letters.slice().reverse().map(letter => {
+        const date = new Date(letter.receivedTime).toLocaleDateString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
+        const preview = letter.content.length > 50 ? letter.content.substring(0, 50) + '…' : letter.content;
+        return `<div class="env-letter-item reply env-spacetime-item ${letter.isNew ? 'env-letter-new' : ''}" onclick="viewEnvLetter('spacetime','${letter.id}')">
+            <div class="env-letter-header"><div class="env-letter-header-from">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                时空来信 · ${date}${letter.isNew ? '<span style="background:rgba(255,255,255,0.3);color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;margin-left:6px;">新</span>' : ''}
+            </div><div class="env-stamp"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg></div></div>
+            <div class="env-letter-body"><div class="env-letter-preview">${preview}</div></div>
+            <button class="env-letter-delete-btn" onclick="deleteEnvLetter(event,'spacetime','${letter.id}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>`;
+    }).join('');
+}
+
 window.viewEnvLetter = function(section, id) {
     const letters = section === 'outbox' ? envelopeData.outbox : envelopeData.inbox;
     const letter = letters.find(l => l.id === id);
     if (!letter) return;
-    if (section === 'inbox' && letter.isNew) {
+    if (section !== 'outbox' && letter.isNew) {
         letter.isNew = false;
         saveEnvelopeData();
         renderEnvelopeLists();
@@ -4711,6 +4745,7 @@ window.deleteEnvLetter = function(event, section, id) {
 window.openNewEnvelopeForm = function() {
     document.getElementById('env-outbox-section').style.display = 'none';
     document.getElementById('env-inbox-section').style.display = 'none';
+    document.getElementById('env-spacetime-section').style.display = 'none';
     document.getElementById('env-main-close-btn').style.display = 'none';
     document.getElementById('env-compose-title').textContent = '写一封信';
     document.getElementById('envelope-input').value = '';
@@ -4723,8 +4758,10 @@ window.cancelEnvelopeCompose = function() {
     document.getElementById('env-main-close-btn').style.display = 'flex';
     if (currentEnvTab === 'outbox') {
         document.getElementById('env-outbox-section').style.display = 'block';
-    } else {
+    } else if (currentEnvTab === 'inbox') {
         document.getElementById('env-inbox-section').style.display = 'block';
+    } else {
+        document.getElementById('env-spacetime-section').style.display = 'block';
     }
 };
 
@@ -15870,8 +15907,10 @@ autoSendSlider.addEventListener('change', () => {
             currentEnvTab = 'outbox';
             document.getElementById('env-tab-outbox').classList.add('active');
             document.getElementById('env-tab-inbox').classList.remove('active');
+            document.getElementById('env-tab-spacetime').classList.remove('active');
             document.getElementById('env-outbox-section').style.display = 'block';
             document.getElementById('env-inbox-section').style.display = 'none';
+            document.getElementById('env-spacetime-section').style.display = 'none';
             document.getElementById('env-compose-form').style.display = 'none';
             document.getElementById('env-main-close-btn').style.display = 'flex';
             renderEnvelopeLists();

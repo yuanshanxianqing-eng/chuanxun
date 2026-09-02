@@ -43,6 +43,7 @@
     let session = null;
     let pendingMode = 'solo_user';
     let pendingRecipe = null;
+    let partnerConsentGranted = false;
     let currentView = 'home';
     let storageFilter = 'all';
     let ingredientQuery = '';
@@ -55,7 +56,7 @@
     let partnerCookingSkill = 'master';
     let selectedTasteMessageId = null;
     let selectedTasteStars = 0;
-    let timers = { auto: null, clock: null, hold: null, stirPrompt: null, toast: null };
+    let timers = { auto: null, clock: null, hold: null, stirPrompt: null, toast: null, invite: null };
 
     function storageKey(name) {
         try {
@@ -200,6 +201,7 @@
             managerTab = btn.dataset.managerTab;
             document.querySelectorAll('[data-manager-tab]').forEach(x => x.classList.toggle('active', x === btn));
             renderManager();
+            requestAnimationFrame(() => { if ($('cook-manager-body')) $('cook-manager-body').scrollTop = 0; });
         }));
         $('cook-export-btn')?.addEventListener('click', exportConfigs);
         $('cook-import-btn')?.addEventListener('click', () => $('cook-json-input')?.click());
@@ -236,6 +238,9 @@
     function closeCooking() {
         clearClock();
         if(timers.hold){clearInterval(timers.hold);timers.hold=null;}
+        if(timers.invite){clearTimeout(timers.invite);timers.invite=null;}
+        closeInviteOverlay();
+        partnerConsentGranted = false;
         const page = $('cooking-page');
         page.classList.remove('active');
         page.setAttribute('aria-hidden', 'true');
@@ -262,6 +267,7 @@
 
     function renderHome() {
         if(timers.hold){clearInterval(timers.hold);timers.hold=null;}
+        partnerConsentGranted = false;
         currentView = 'home';
         setHeader('做饭', '两个人的小厨房');
         const live = session && session.mode === 'solo_partner' && session.stage !== 'result';
@@ -271,7 +277,7 @@
         setShell(`${resume}${pending}<div class="cook-kicker">TODAY'S KITCHEN</div><h2 class="cook-section-title">今天要怎么做？</h2><p class="cook-section-sub">所有结果由你的操作与随机概率共同决定。</p>
             <div class="cook-mode-grid">
                 <button class="cook-mode-card" data-cook-mode="solo_user" ${pendingResult?'disabled':''}><i class="fas fa-user"></i><b>我来做</b><small>自己完成取材、备菜和料理。</small></button>
-                <button class="cook-mode-card ${live ? 'live' : ''}" data-cook-mode="${live ? 'watch' : 'invite_partner'}" ${pendingResult?'disabled':''}><i class="fas fa-eye"></i><b>${live ? getPartnerName() + '正在做饭' : '邀请对方做'}</b><small>${live ? '料理已经开始，可以进去围观。' : '邀请对方掌勺，你只能围观和发表情。'}</small></button>
+                <button class="cook-mode-card ${live ? 'live' : ''}" data-cook-mode="${live ? 'watch' : 'invite_partner'}" ${pendingResult?'disabled':''}><i class="fas fa-eye"></i><b>${live ? getPartnerName() + '正在做饭' : '请对方做饭'}</b><small>${live ? '料理已经开始，可以进去围观。' : '先询问对方；接受后再由你挑选菜单。'}</small></button>
                 <button class="cook-mode-card" data-cook-mode="together" ${pendingResult?'disabled':''}><i class="fas fa-hands"></i><b>一起做</b><small>每张完整操作卡轮流完成。</small></button>
             </div>
             <div class="cook-home-tools"><button id="cook-browse-recipes"><i class="fas fa-book"></i> 菜谱</button><button id="cook-open-manager"><i class="fas fa-sliders"></i> 菜谱管理</button><button id="cook-open-skill"><i class="fas fa-kitchen-set"></i> 梦角厨艺</button><button id="cook-open-history"><i class="fas fa-utensils"></i> 我们的厨房</button></div>`);
@@ -282,6 +288,8 @@
         document.querySelectorAll('[data-cook-mode]').forEach(btn => btn.addEventListener('click', () => {
             const mode = btn.dataset.cookMode;
             if (mode === 'watch') return renderStage();
+            if (mode === 'invite_partner') return requestPartnerCookingConsent();
+            partnerConsentGranted = false;
             pendingMode = mode;
             renderRecipeList();
         }));
@@ -296,23 +304,24 @@
         setHeader('选择菜谱', pendingMode === 'browse' ? '查看现有菜谱' : modeNames[pendingMode === 'invite_partner' ? 'solo_partner' : pendingMode]);
         const categories = ['all', ...new Set(recipes.map(item => item.category || '其他'))];
         const filtered = recipes.filter(item => (recipeCategory === 'all' || item.category === recipeCategory) && (!recipeQuery || item.name.toLowerCase().includes(recipeQuery.toLowerCase())));
-        setShell(`<div class="cook-kicker">RECIPE BOOK</div><h2 class="cook-section-title">选一道想做的菜</h2>
+        const acceptedBanner = pendingMode === 'invite_partner' && partnerConsentGranted ? `<div class="cook-consent-banner"><span>${avatarHtml(false)}</span><div><small>INVITATION ACCEPTED</small><b>${escapeHtml(getPartnerName())}答应掌勺了</b><p>现在由你从菜单里挑一道想吃的菜。</p></div><i class="fas fa-circle-check"></i></div>` : '';
+        setShell(`${acceptedBanner}<div class="cook-kicker">RECIPE BOOK</div><h2 class="cook-section-title">${acceptedBanner ? '今天想让对方做什么？' : '选一道想做的菜'}</h2>
             <div class="cook-recipe-toolbar"><input class="cook-search" id="cook-recipe-search" value="${escapeHtml(recipeQuery)}" placeholder="搜索菜名"><select class="cook-filter" id="cook-recipe-category">${categories.map(c => `<option value="${escapeHtml(c)}" ${c === recipeCategory ? 'selected' : ''}>${escapeHtml(c === 'all' ? '全部分类' : c)}</option>`).join('')}</select></div>
-            <div class="cook-recipe-grid">${filtered.map(recipeCardHtml).join('') || '<p class="cook-section-sub">没有找到菜谱。</p>'}</div>`);
+            <div class="cook-recipe-grid ${acceptedBanner ? 'cook-menu-grid' : ''}">${filtered.map(recipeCardHtml).join('') || '<p class="cook-section-sub">没有找到菜谱。</p>'}</div>`);
         $('cook-recipe-search')?.addEventListener('input', event => { recipeQuery = event.target.value; renderRecipeList(); });
         $('cook-recipe-category')?.addEventListener('change', event => { recipeCategory = event.target.value; renderRecipeList(); });
         document.querySelectorAll('[data-recipe-id]').forEach(card => card.addEventListener('click', () => renderRecipeDetail(card.dataset.recipeId)));
     }
     function recipeCardHtml(recipe) {
         const art = recipe.assets?.dish ? `<img src="${escapeHtml(recipe.assets.dish)}" alt="">` : '🍲';
-        return `<button class="cook-recipe-card" data-recipe-id="${escapeHtml(recipe.id)}"><span class="cook-recipe-art">${art}</span><span class="cook-recipe-info"><b>${escapeHtml(recipe.name)}</b><small>${escapeHtml(recipe.category || '其他')} · ${recipe.steps?.length || 0} 个步骤</small><span class="cook-stars">${'★'.repeat(clamp(Number(recipe.difficulty) || 1,1,5))}${'☆'.repeat(5-clamp(Number(recipe.difficulty) || 1,1,5))}</span></span><i class="fas fa-chevron-right"></i></button>`;
+        return `<button class="cook-recipe-card ${partnerConsentGranted && pendingMode === 'invite_partner' ? 'cook-menu-card' : ''}" data-recipe-id="${escapeHtml(recipe.id)}"><span class="cook-recipe-art">${art}</span><span class="cook-recipe-info"><b>${escapeHtml(recipe.name)}</b><small>${escapeHtml(recipe.category || '其他')} · ${recipe.steps?.length || 0} 个步骤</small><span class="cook-stars">${'★'.repeat(clamp(Number(recipe.difficulty) || 1,1,5))}${'☆'.repeat(5-clamp(Number(recipe.difficulty) || 1,1,5))}</span></span><i class="fas fa-chevron-right"></i></button>`;
     }
     function renderRecipeDetail(id) {
         const recipe = getRecipe(id); if (!recipe) return;
         pendingRecipe = recipe;
         currentView = 'recipe-detail';
         setHeader(recipe.name, recipe.category || '菜谱');
-        const buttonText = pendingMode === 'browse' ? '返回菜谱' : pendingMode === 'solo_user' ? '开始准备食材' : pendingMode === 'together' ? '邀请对方一起做' : '邀请对方来做';
+        const buttonText = pendingMode === 'browse' ? '返回菜谱' : pendingMode === 'solo_user' ? '开始准备食材' : pendingMode === 'together' ? '邀请对方一起做' : partnerConsentGranted ? '就做这道菜' : '邀请对方来做';
         setShell(`<div class="cook-recipe-detail"><div class="cook-kicker">RECIPE DETAIL</div><h2 class="cook-section-title">${escapeHtml(recipe.name)}</h2><p class="cook-section-sub">难度 ${'★'.repeat(recipe.difficulty || 1)} · ${recipe.steps.length} 个料理步骤 · ${recipe.ingredients.length} 种食材</p>
             <div class="cook-required-list">${recipe.ingredients.map(req => { const ing=getIngredient(req.id); return `<div class="cook-required-item"><span>${ing.icon || '🥣'}</span><span>${escapeHtml(ing.name)}</span><b>${escapeHtml(req.amount)}${escapeHtml(req.unit)}</b></div>`; }).join('')}</div>
             <div class="cook-actions"><button class="cook-secondary" id="cook-detail-back">返回</button><button class="cook-primary" id="cook-detail-start">${buttonText}</button></div></div>`);
@@ -320,8 +329,52 @@
         $('cook-detail-start')?.addEventListener('click', () => {
             if (pendingMode === 'browse') return renderRecipeList();
             if (pendingMode === 'solo_user') return startSession('solo_user', recipe.id);
+            if (pendingMode === 'invite_partner' && partnerConsentGranted) {
+                partnerConsentGranted = false;
+                return startSession('solo_partner', recipe.id, true);
+            }
             requestCookingInvite(pendingMode, recipe.id);
         });
+    }
+
+    function inviteOverlay(state) {
+        let overlay = $('cook-invite-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'cook-invite-overlay';
+            overlay.className = 'cook-invite-overlay';
+            $('cooking-page')?.appendChild(overlay);
+        }
+        const pending = state === 'pending', accepted = state === 'accepted';
+        overlay.className = 'cook-invite-overlay show ' + state;
+        overlay.innerHTML = `<div class="cook-invite-card"><div class="cook-invite-avatar">${avatarHtml(false)}<i></i></div><small>${pending ? 'WAITING FOR REPLY' : accepted ? 'INVITATION ACCEPTED' : 'INVITATION DECLINED'}</small><h3>${pending ? '正在询问' + escapeHtml(getPartnerName()) : accepted ? escapeHtml(getPartnerName()) + '答应做饭了' : escapeHtml(getPartnerName()) + '这次没有答应'}</h3><p>${pending ? '先等等，让对方考虑一下……' : accepted ? '接下来由你挑选今天的菜单。' : '没关系，下次再邀请也可以。'}</p><div class="cook-invite-dots">${pending ? '<i></i><i></i><i></i>' : `<i class="fas ${accepted ? 'fa-check' : 'fa-minus'}"></i>`}</div></div>`;
+        return overlay;
+    }
+    function closeInviteOverlay() { $('cook-invite-overlay')?.remove(); }
+    function requestPartnerCookingConsent() {
+        if (session || timers.invite) return;
+        pendingMode = 'invite_partner';
+        partnerConsentGranted = false;
+        inviteOverlay('pending');
+        timers.invite = setTimeout(() => {
+            timers.invite = null;
+            const accepted = Math.random() < .72;
+            inviteOverlay(accepted ? 'accepted' : 'declined');
+            if (accepted) {
+                partnerConsentGranted = true;
+                timers.invite = setTimeout(() => {
+                    timers.invite = null;
+                    closeInviteOverlay();
+                    renderRecipeList();
+                }, 1050);
+            } else {
+                timers.invite = setTimeout(() => {
+                    timers.invite = null;
+                    closeInviteOverlay();
+                    renderHome();
+                }, 1350);
+            }
+        }, 1800 + Math.random() * 2600);
     }
 
     function requestCookingInvite(mode, recipeId) {
@@ -972,7 +1025,7 @@
     function hideCookingToast(){$('cook-toast')?.classList.remove('show');}
     async function rollPartnerCooking(){
         if(session)return;const today=new Date().toISOString().slice(0,10),lastDay=await readStore('lastPartnerRollDay',''),lastEvent=await readStore('lastPartnerCookAt',0);if(lastDay===today)return;writeStore('lastPartnerRollDay',today);if(Date.now()-Number(lastEvent)<36*3600000)return;if(Math.random()<.05){writeStore('lastPartnerCookAt',Date.now());const recipe=pick(recipes);startSession('solo_partner',recipe.id,false);showCookingToast(getPartnerName()+'好像在厨房忙什么……','料理已经开始，可以进去围观',true);}}
-    function clearAllTimers(){clearTimeout(timers.auto);timers.auto=null;clearClock();if(timers.hold){clearInterval(timers.hold);timers.hold=null;}}
+    function clearAllTimers(){clearTimeout(timers.auto);timers.auto=null;clearTimeout(timers.invite);timers.invite=null;closeInviteOverlay();clearClock();if(timers.hold){clearInterval(timers.hold);timers.hold=null;}}
 
     function bindDynamicEvents(){
         bindSpectatorDock();

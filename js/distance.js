@@ -14,6 +14,7 @@
     let loaded = false;
     let pageOpen = false;
     let raf = 0;
+    let backgroundTimer = null;
     let path = null;
     let pauseUntil = 0;
     let point = randomPoint();
@@ -23,6 +24,8 @@
     let touchSignal = false;
     let nextIntensityShift = 0;
     let nextLinkShift = 0;
+    let worldUpdatedAt = Date.now();
+    let worldSavedAt = 0;
     let previousBodyOverflow = '';
 
     function key(name) {
@@ -127,9 +130,46 @@
         preferences = Object.assign(preferences, await read('distanceState', {}));
         const saved = await read('distanceRecords', []);
         records = Array.isArray(saved) ? saved : [];
+        const world = await read('distanceWorldState', null);
+        if (world && world.point && Number.isFinite(Number(world.point.x)) && Number.isFinite(Number(world.point.y))) {
+            point = { x: clamp(Number(world.point.x), 3.5, 96.5), y: clamp(Number(world.point.y), 3.5, 96.5) };
+            near = radiusOf(point) <= NEAR_RADIUS;
+            intensity = clamp(Number(world.intensity) || 0, 0, 1);
+            linkStrength = clamp(Number(world.linkStrength) || 0, 0, 1);
+            touchSignal = !!world.touchSignal;
+            worldUpdatedAt = Number(world.updatedAt) || Date.now();
+        }
         loaded = true;
         await pruneRecords(true);
+        await catchUpWorld(Date.now());
         applyPreferences();
+    }
+
+    function saveWorld(force) {
+        const now = Date.now();
+        if (!force && now - worldSavedAt < 10000) return;
+        worldSavedAt = now;
+        write('distanceWorldState', { point: { x: point.x, y: point.y }, near, intensity, linkStrength, touchSignal, updatedAt: now });
+    }
+
+    async function catchUpWorld(now) {
+        const gap = Math.max(0, now - worldUpdatedAt);
+        const steps = Math.min(24, Math.floor(gap / 15000));
+        if (steps > 0) {
+            const stepTime = gap / steps;
+            for (let i = 1; i <= steps; i++) {
+                point = randomWalkTarget(point);
+                const wasNear = near;
+                near = radiusOf(point) <= NEAR_RADIUS;
+                if (near !== wasNear) await addRecord(near ? 'near' : 'leave', worldUpdatedAt + stepTime * i);
+            }
+            intensity = Math.random();
+            linkStrength = clamp(linkStrength + (Math.random() + Math.random() - 1) * .65, 0, 1);
+        }
+        worldUpdatedAt = now;
+        path = null;
+        pauseUntil = now + randomHoldDuration();
+        saveWorld(true);
     }
     function applyPreferences() {
         const page = $('distance-page');
@@ -211,8 +251,8 @@
         path = { start: { ...point }, c1, c2, end, startTime: now, duration: randomMoveDuration() };
     }
 
-    async function addRecord(type) {
-        const ts = Date.now(), name = partnerName();
+    async function addRecord(type, at) {
+        const ts = Number(at) || Date.now(), name = partnerName();
         const text = type === 'near' ? `${name}出现在附近。` : `${name}离开了附近。`;
         const item = { id: `dist_${ts}_${Math.random().toString(36).slice(2,7)}`, ts, expiresAt: ts + TTL, type, text };
         records.unshift(item);
@@ -245,12 +285,12 @@
     }
 
     function setPosition(position, emit) {
-        const character = $('dist-char'); if (!character) return;
-        character.style.left = position.x + '%'; character.style.top = position.y + '%';
+        const character = $('dist-char');
+        if (character) { character.style.left = position.x + '%'; character.style.top = position.y + '%'; }
         const previous = near;
         near = radiusOf(position) <= NEAR_RADIUS;
         if (emit && near !== previous) addRecord(near ? 'near' : 'leave');
-        character.classList.toggle('visible', near);
+        character?.classList.toggle('visible', near);
     }
     function formatDirectionLabel(label) {
         return ({ 前:'前方',后:'后方',左:'左侧',右:'右侧',东:'东侧',西:'西侧',南:'南侧',北:'北侧' })[label] || `${label}侧`;
@@ -306,8 +346,8 @@
         if ($('dist-intensity-fill')) $('dist-intensity-fill').style.width = Math.round(intensity*100) + '%';
         if ($('dist-link-fill')) $('dist-link-fill').style.width = Math.round(linkStrength*100) + '%';
     }
-    function tick(now) {
-        if (!pageOpen) { raf = 0; return; }
+    function advanceWorld(now) {
+        worldUpdatedAt = now;
         if (now >= pauseUntil && !path) buildPath(now);
         if (path) {
             const raw = clamp((now - path.startTime) / path.duration, 0, 1), eased = raw*raw*(3-2*raw);
@@ -315,9 +355,16 @@
             point.x += Math.sin(now/1570)*.08 + Math.sin(now/830)*.035;
             point.y += Math.cos(now/1730)*.08 + Math.cos(now/910)*.035;
             setPosition(point, true);
-            if (raw >= 1) { path = null; pauseUntil = now + randomHoldDuration(); }
+            if (raw >= 1) { point = { ...path.end }; path = null; pauseUntil = now + randomHoldDuration(); }
+        } else {
+            setPosition(point, false);
         }
-        updateSenses(Date.now());
+        updateSenses(now);
+        saveWorld(false);
+    }
+    function tick() {
+        if (!pageOpen) { raf = 0; return; }
+        advanceWorld(Date.now());
         raf = requestAnimationFrame(tick);
     }
 
@@ -342,8 +389,13 @@
 
     async function init() {
         injectPage(); bindEvents();
+        await loadData();
+        advanceWorld(Date.now());
+        backgroundTimer = setInterval(() => { if (!pageOpen) advanceWorld(Date.now()); }, 800);
         setInterval(() => pruneRecords(false), 60 * 1000);
         window.DistanceFeature = { open: openDistance, close: closeDistance, pruneRecords };
     }
+    window.addEventListener('pagehide', () => saveWorld(true));
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) catchUpWorld(Date.now()); else saveWorld(true); });
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

@@ -94,7 +94,20 @@
                         <button class="dist-panel-collapse" id="dist-panel-collapse" aria-label="折叠状态栏"><span>›</span></button>
                         <div class="dist-panel-inner">
                             <div class="dist-panel-title">状态栏</div><div class="dist-panel-rule"></div>
-                            <div class="dist-panel-planet"><div class="dist-planet-glow"></div><div class="dist-planet-core"></div></div>
+                            <div class="dist-panel-planet">
+                                <div class="dist-planet-glow"></div>
+                                <div class="dist-planet-shell">
+                                    <div class="dist-planet-orbit"></div>
+                                    <div class="dist-planet-orbit dist-planet-orbit-two"></div>
+                                    <div class="dist-planet-shine"></div>
+                                    <div class="dist-planet-ring"></div>
+                                    <div class="dist-planet-core"></div>
+                                </div>
+                                <span class="dist-panel-star dist-ps1">✦</span>
+                                <span class="dist-panel-star dist-ps2">✦</span>
+                                <span class="dist-panel-star dist-ps3">✦</span>
+                                <span class="dist-panel-star dist-ps4">✦</span>
+                            </div>
                             <div class="dist-status-list">
                                 <div class="dist-status-item"><div class="dist-status-label">方位感知 <span class="dist-status-mode" id="dist-direction-label">东西南北</span></div><div class="dist-status-value" id="dist-direction-value">暂时感知不到</div></div>
                                 <div class="dist-status-item"><div class="dist-status-label">感知强度</div><div class="dist-status-value" id="dist-intensity-value">很淡，像只是掠过一丝气息</div><div class="dist-strength-bar"><div class="dist-strength-fill" id="dist-intensity-fill"></div></div></div>

@@ -464,6 +464,10 @@
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:4px;"><path d="M22 13V19a2 2 0 01-2 2H4a2 2 0 01-2-2v-6"/><polyline points="15 3 21 3 21 9"/><line x1="21" y1="3" x2="10" y2="14"/></svg>收到的信
                     <span id="env-inbox-badge" class="env-badge" style="display:none;"></span>
                 </button>
+                <button class="env-tab-btn" id="env-tab-spacetime" onclick="switchEnvTab('spacetime')">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:4px;"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="M5 5l2 2M19 5l-2 2"/></svg>时空来信
+                    <span id="env-spacetime-badge" class="env-badge" style="display:none;"></span>
+                </button>
             </div>
 
             <div id="env-outbox-section">
@@ -472,6 +476,10 @@
 
             <div id="env-inbox-section" style="display:none;">
                 <div id="env-inbox-list"></div>
+            </div>
+
+            <div id="env-spacetime-section" style="display:none;">
+                <div id="env-spacetime-list"></div>
             </div>
 
             <div id="env-compose-form" style="display:none;">

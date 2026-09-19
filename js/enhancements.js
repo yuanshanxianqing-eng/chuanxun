@@ -178,7 +178,13 @@
 
     function avatarHtml(isUser) {
         const el = isUser ? document.getElementById('my-avatar') : document.getElementById('partner-avatar');
-        const img = el?.querySelector('img'); return img ? `<img src="${esc(img.src)}" alt="">` : '<i class="fas fa-user"></i>';
+        if (!el) return '<i class="fas fa-user"></i>';
+        const img = el.querySelector('img[src]:not([src=""])');
+        if (img) return `<img src="${esc(img.currentSrc || img.src)}" alt="">`;
+        // 头像未使用图片时，也沿用主站此刻的头像内容，避免特殊卡片冒出另一套默认头像。
+        const clone = el.cloneNode(true);
+        clone.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
+        return clone.innerHTML.trim() || '<i class="fas fa-user"></i>';
     }
     window.EnhancementUI = {
         renderRedpacket(msg) {

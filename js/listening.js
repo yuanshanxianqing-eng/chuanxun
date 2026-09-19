@@ -79,6 +79,27 @@
         }
     }
 
+    function beginSharedPlayback() {
+        if (!frame || !frame.contentWindow) return;
+        try {
+            var bridge = frame.contentWindow.ListeningPlayerBridge;
+            if (bridge && typeof bridge.begin === 'function') bridge.begin();
+        } catch (error) {
+            console.warn('[listening] 歌单接入失败', error);
+        }
+    }
+
+    function returnPlaybackToFloatingPlayer() {
+        if (!frame || !frame.contentWindow) return false;
+        try {
+            var bridge = frame.contentWindow.ListeningPlayerBridge;
+            return !!(bridge && typeof bridge.end === 'function' && bridge.end());
+        } catch (error) {
+            console.warn('[listening] 播放状态交还失败', error);
+            return false;
+        }
+    }
+
     function openListening() {
         if (!page) return;
         closeInviteModal();
@@ -86,12 +107,15 @@
         document.body.style.overflow = 'hidden';
         page.classList.add('active');
         page.setAttribute('aria-hidden', 'false');
-        requestAnimationFrame(syncPlayerContext);
+        requestAnimationFrame(function () {
+            syncPlayerContext();
+            beginSharedPlayback();
+        });
     }
 
     function closeListening(options) {
         if (!page || !page.classList.contains('active')) return;
-        pausePlayer();
+        if (!returnPlaybackToFloatingPlayer()) pausePlayer();
         page.classList.remove('active');
         page.classList.remove('music-center-open');
         page.setAttribute('aria-hidden', 'true');
@@ -110,10 +134,20 @@
 
         trigger.addEventListener('click', openListening);
         back.addEventListener('click', function () { closeListening({ reopenInvite: true }); });
-        frame.addEventListener('load', syncPlayerContext);
+        frame.addEventListener('load', function () {
+            syncPlayerContext();
+            // 慢速设备上 iframe 可能晚于入口页加载；如果此时已经进入听歌页，
+            // 仍要立即接管悬浮播放器的歌单和播放进度。
+            if (page.classList.contains('active')) beginSharedPlayback();
+        });
         window.addEventListener('message', function (event) {
-            if (!frame || event.source !== frame.contentWindow || !event.data || event.data.type !== 'listening-music-center') return;
-            page.classList.toggle('music-center-open', Boolean(event.data.open));
+            if (!frame || event.source !== frame.contentWindow || !event.data) return;
+            if (event.data.type === 'listening-music-center') {
+                page.classList.toggle('music-center-open', Boolean(event.data.open));
+            }
+            if (event.data.type === 'listening-close-request') {
+                closeListening({ reopenInvite: true });
+            }
         });
         document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape' && page.classList.contains('active')) {

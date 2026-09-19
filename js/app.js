@@ -2165,9 +2165,11 @@ if (msg.type === 'gift') {
                 const groupMember = (msg.sender !== 'user' && typeof getGroupMemberForMessage === 'function') ? getGroupMemberForMessage(msg.id) : null;
 
                 if (settings.inChatAvatarEnabled) {
+                    const isUser = msg.sender === 'user';
                     const isSameSenderGroup = groupMember && lastSender === 'group_' + (groupMember ? groupMember.name : '');
                     const isSameSenderNormal = !groupMember && msg.sender === lastSender;
-                    const shouldHide = !settings.alwaysShowAvatar && (isSameSenderGroup || isSameSenderNormal);
+                    // 自己发送的消息始终显示“我的头像”；只对连续的对方消息做头像折叠。
+                    const shouldHide = !isUser && !settings.alwaysShowAvatar && (isSameSenderGroup || isSameSenderNormal);
                     if (shouldHide) {
                         avatarDiv.classList.add('hidden');
                     } else if (groupMember) {
@@ -2181,7 +2183,6 @@ if (msg.type === 'gift') {
                             avatarDiv.innerHTML = `<div style="width:100%;height:100%;background:var(--accent-color);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;">${initials}</div>`;
                         }
                     } else {
-                        const isUser = msg.sender === 'user';
                         const avatarElement = isUser ? DOMElements.me.avatar : DOMElements.partner.avatar;
                         const frameSettings = isUser ? settings.myAvatarFrame : settings.partnerAvatarFrame;
                         const avatarShape = isUser ? (settings.myAvatarShape || 'circle') : (settings.partnerAvatarShape || 'circle');
@@ -4454,10 +4455,8 @@ window.openEnvelopeAndViewReply = function(replyId) {
     const envelopeModal = document.getElementById('envelope-modal');
     showModal(envelopeModal);
     setTimeout(() => {
-        const letter = envelopeData.inbox.find(item => item.id === replyId);
-        const section = letter && letter.type === 'spacetime' ? 'spacetime' : 'inbox';
-        switchEnvTab(section);
-        viewEnvLetter(section, replyId);
+        switchEnvTab('inbox');
+        viewEnvLetter('inbox', replyId);
     }, 200);
 };
 
@@ -4479,10 +4478,8 @@ window.switchEnvTab = function(tab) {
     currentEnvTab = tab;
     document.getElementById('env-tab-outbox').classList.toggle('active', tab === 'outbox');
     document.getElementById('env-tab-inbox').classList.toggle('active', tab === 'inbox');
-    document.getElementById('env-tab-spacetime').classList.toggle('active', tab === 'spacetime');
     document.getElementById('env-outbox-section').style.display = tab === 'outbox' ? 'block' : 'none';
     document.getElementById('env-inbox-section').style.display = tab === 'inbox' ? 'block' : 'none';
-    document.getElementById('env-spacetime-section').style.display = tab === 'spacetime' ? 'block' : 'none';
     document.getElementById('env-compose-form').style.display = 'none';
     document.getElementById('env-main-close-btn').style.display = 'flex';
     renderEnvelopeLists();
@@ -4491,18 +4488,14 @@ window.switchEnvTab = function(tab) {
 function renderEnvelopeLists() {
     renderOutboxList();
     renderInboxList();
-    renderSpacetimeList();
     const pendingCount = envelopeData.outbox.filter(l => l.status === 'pending').length;
-    const newInboxCount = envelopeData.inbox.filter(l => l.type !== 'spacetime' && l.isNew).length;
-    const newSpacetimeCount = envelopeData.inbox.filter(l => l.type === 'spacetime' && l.isNew).length;
+    const newInboxCount = envelopeData.inbox.filter(l => l.isNew).length;
     const outboxBadge = document.getElementById('env-outbox-badge');
     const inboxBadge = document.getElementById('env-inbox-badge');
-    const spacetimeBadge = document.getElementById('env-spacetime-badge');
     if (outboxBadge) { outboxBadge.textContent = pendingCount; outboxBadge.style.display = pendingCount > 0 ? 'inline-block' : 'none'; }
     if (inboxBadge) { inboxBadge.textContent = newInboxCount; inboxBadge.style.display = newInboxCount > 0 ? 'inline-block' : 'none'; }
-    if (spacetimeBadge) { spacetimeBadge.textContent = newSpacetimeCount; spacetimeBadge.style.display = newSpacetimeCount > 0 ? 'inline-block' : 'none'; }
     const envelopeEntryBadge = document.getElementById('env-entry-badge');
-    if (envelopeEntryBadge) { envelopeEntryBadge.style.display = newInboxCount + newSpacetimeCount > 0 ? 'inline-block' : 'none'; }
+    if (envelopeEntryBadge) { envelopeEntryBadge.style.display = newInboxCount > 0 ? 'inline-block' : 'none'; }
 }
 
 function renderOutboxList() {
@@ -4550,8 +4543,7 @@ function renderOutboxList() {
 function renderInboxList() {
     const list = document.getElementById('env-inbox-list');
     if (!list) return;
-    const letters = envelopeData.inbox.filter(letter => letter.type !== 'spacetime');
-    if (letters.length === 0) {
+    if (envelopeData.inbox.length === 0) {
         list.innerHTML = `<div class="env-empty">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/><polyline points="22 13 12 13"/><path d="M19 16l-5-3-5 3"/></svg>
             <div style="font-size:14px;font-weight:500;margin-top:4px;">还没有收到回信</div>
@@ -4559,17 +4551,18 @@ function renderInboxList() {
         </div>`;
         return;
     }
-    list.innerHTML = letters.slice().reverse().map(letter => {
+    list.innerHTML = envelopeData.inbox.slice().reverse().map(letter => {
         const date = new Date(letter.receivedTime).toLocaleDateString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
         const preview = letter.content.length > 50 ? letter.content.substring(0, 50) + '…' : letter.content;
         const isNew = letter.isNew;
         const origPreview = letter.originalContent ? (letter.originalContent.length > 32 ? letter.originalContent.substring(0, 32) + '…' : letter.originalContent) : '';
+        const isSpacetime = letter.type === 'spacetime';
         return `
         <div class="env-letter-item reply ${isNew ? 'env-letter-new' : ''}" onclick="viewEnvLetter('inbox','${letter.id}')">
             <div class="env-letter-header">
                 <div class="env-letter-header-from">
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:3px;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>
-                    收到 · ${date}
+                    ${isSpacetime ? '时空来信' : '收到'} · ${date}
                     ${isNew ? '<span style="background:rgba(255,255,255,0.3);color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;margin-left:6px;">新</span>' : ''}
                 </div>
                 <div class="env-stamp">
@@ -4587,37 +4580,11 @@ function renderInboxList() {
     }).join('');
 }
 
-function renderSpacetimeList() {
-    const list = document.getElementById('env-spacetime-list');
-    if (!list) return;
-    const letters = envelopeData.inbox.filter(letter => letter.type === 'spacetime');
-    if (!letters.length) {
-        list.innerHTML = `<div class="env-empty">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="M5 5l2 2M19 5l-2 2"/></svg>
-            <div style="font-size:14px;font-weight:500;margin-top:4px;">还没有收到时空来信</div>
-            <div style="font-size:12px;margin-top:6px;opacity:0.6;">它不会按时出现，也许会在某个意外的时刻抵达。</div>
-        </div>`;
-        return;
-    }
-    list.innerHTML = letters.slice().reverse().map(letter => {
-        const date = new Date(letter.receivedTime).toLocaleDateString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
-        const preview = letter.content.length > 50 ? letter.content.substring(0, 50) + '…' : letter.content;
-        return `<div class="env-letter-item reply env-spacetime-item ${letter.isNew ? 'env-letter-new' : ''}" onclick="viewEnvLetter('spacetime','${letter.id}')">
-            <div class="env-letter-header"><div class="env-letter-header-from">
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-                时空来信 · ${date}${letter.isNew ? '<span style="background:rgba(255,255,255,0.3);color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;margin-left:6px;">新</span>' : ''}
-            </div><div class="env-stamp"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg></div></div>
-            <div class="env-letter-body"><div class="env-letter-preview">${preview}</div></div>
-            <button class="env-letter-delete-btn" onclick="deleteEnvLetter(event,'spacetime','${letter.id}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-        </div>`;
-    }).join('');
-}
-
 window.viewEnvLetter = function(section, id) {
     const letters = section === 'outbox' ? envelopeData.outbox : envelopeData.inbox;
     const letter = letters.find(l => l.id === id);
     if (!letter) return;
-    if (section !== 'outbox' && letter.isNew) {
+    if (section === 'inbox' && letter.isNew) {
         letter.isNew = false;
         saveEnvelopeData();
         renderEnvelopeLists();
@@ -4745,7 +4712,6 @@ window.deleteEnvLetter = function(event, section, id) {
 window.openNewEnvelopeForm = function() {
     document.getElementById('env-outbox-section').style.display = 'none';
     document.getElementById('env-inbox-section').style.display = 'none';
-    document.getElementById('env-spacetime-section').style.display = 'none';
     document.getElementById('env-main-close-btn').style.display = 'none';
     document.getElementById('env-compose-title').textContent = '写一封信';
     document.getElementById('envelope-input').value = '';
@@ -4758,10 +4724,8 @@ window.cancelEnvelopeCompose = function() {
     document.getElementById('env-main-close-btn').style.display = 'flex';
     if (currentEnvTab === 'outbox') {
         document.getElementById('env-outbox-section').style.display = 'block';
-    } else if (currentEnvTab === 'inbox') {
-        document.getElementById('env-inbox-section').style.display = 'block';
     } else {
-        document.getElementById('env-spacetime-section').style.display = 'block';
+        document.getElementById('env-inbox-section').style.display = 'block';
     }
 };
 
@@ -15907,10 +15871,8 @@ autoSendSlider.addEventListener('change', () => {
             currentEnvTab = 'outbox';
             document.getElementById('env-tab-outbox').classList.add('active');
             document.getElementById('env-tab-inbox').classList.remove('active');
-            document.getElementById('env-tab-spacetime').classList.remove('active');
             document.getElementById('env-outbox-section').style.display = 'block';
             document.getElementById('env-inbox-section').style.display = 'none';
-            document.getElementById('env-spacetime-section').style.display = 'none';
             document.getElementById('env-compose-form').style.display = 'none';
             document.getElementById('env-main-close-btn').style.display = 'flex';
             renderEnvelopeLists();
@@ -17110,6 +17072,94 @@ function renderSearchResults(results, container, closeDialog) {
         });
     });
 }
+
+    function normalizeSharedSong(song) {
+        if (!song || !song.url) return null;
+        return {
+            title: String(song.title || song.name || '未命名歌曲'),
+            sub: String(song.sub || song.artists || ''),
+            url: String(song.url),
+            lrc: typeof song.lrc === 'string' ? song.lrc : '',
+            picUrl: song.picUrl || song.cover || null,
+            isCustom: song.isCustom !== false
+        };
+    }
+
+    function syncFloatingPlayerUI(playing) {
+        isPlaying = !!playing;
+        document.getElementById('icon-play').style.display = isPlaying ? 'none' : 'block';
+        document.getElementById('icon-pause').style.display = isPlaying ? 'block' : 'none';
+        player.classList.toggle('playing', isPlaying);
+    }
+
+    function floatingPlayerState() {
+        return {
+            songs: songs.map(song => ({ ...song })),
+            currentIndex: currentIndex,
+            currentTime: Number.isFinite(audio.currentTime) ? audio.currentTime : 0,
+            isPlaying: !audio.paused && !audio.ended
+        };
+    }
+
+    function seekSharedAudio(seconds, shouldPlay) {
+        const seek = () => {
+            if (Number.isFinite(seconds) && seconds >= 0) {
+                const max = Number.isFinite(audio.duration) ? Math.max(0, audio.duration - .05) : seconds;
+                try { audio.currentTime = Math.min(seconds, max); } catch (e) {}
+            }
+            if (shouldPlay) {
+                audio.play().then(() => syncFloatingPlayerUI(true)).catch(() => syncFloatingPlayerUI(false));
+            } else {
+                audio.pause();
+                syncFloatingPlayerUI(false);
+            }
+        };
+        if (audio.readyState >= 1) seek();
+        else audio.addEventListener('loadedmetadata', seek, { once: true });
+    }
+
+    // 听歌邀约页与悬浮播放器共用同一份歌单，并在进出页面时无缝交接播放进度。
+    window.FloatingMusicPlayer = {
+        getState: floatingPlayerState,
+        beginListeningSession: function () {
+            const state = floatingPlayerState();
+            audio.pause();
+            syncFloatingPlayerUI(false);
+            return state;
+        },
+        replacePlaylist: function (incoming) {
+            if (!Array.isArray(incoming)) return floatingPlayerState();
+            const currentUrl = songs[currentIndex] && songs[currentIndex].url;
+            songs = incoming.map(normalizeSharedSong).filter(Boolean);
+            const matchedIndex = currentUrl ? songs.findIndex(song => song.url === currentUrl) : -1;
+            currentIndex = matchedIndex >= 0 ? matchedIndex : Math.min(Math.max(currentIndex, 0), Math.max(0, songs.length - 1));
+            localforage.setItem(APP_PREFIX + 'customSongs', songs).catch(() => {});
+            renderPlaylist();
+            return floatingPlayerState();
+        },
+        acceptListeningState: function (state) {
+            state = state || {};
+            if (Array.isArray(state.songs)) {
+                songs = state.songs.map(normalizeSharedSong).filter(Boolean);
+            }
+            if (!songs.length) {
+                audio.pause();
+                audio.removeAttribute('src');
+                syncFloatingPlayerUI(false);
+                localforage.setItem(APP_PREFIX + 'customSongs', songs).catch(() => {});
+                renderPlaylist();
+                return;
+            }
+            currentIndex = Math.min(Math.max(Number(state.currentIndex) || 0, 0), songs.length - 1);
+            savePlaylist();
+            loadSong(currentIndex);
+            settings.musicPlayerEnabled = true;
+            player.classList.add('visible');
+            throttledSaveData();
+            seekSharedAudio(Number(state.currentTime) || 0, !!state.isPlaying);
+        }
+    };
+
     loadSong(0);
     renderPlaylist();
     setupDrag();

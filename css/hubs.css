@@ -87,6 +87,24 @@
     font-size: 19px;
 }
 
+.hub-emoji-icon,
+.home-room-emoji {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(var(--accent-color-rgb), 0.11);
+    line-height: 1;
+}
+
+.hub-emoji-icon {
+    width: 46px;
+    height: 46px;
+    margin-bottom: 2px;
+    border-radius: 14px;
+    font-size: 23px;
+    filter: saturate(.9);
+}
+
 .hub-card-state {
     padding: 2px 7px;
     border-radius: 999px;
@@ -251,6 +269,17 @@
     font-size: 18px;
 }
 
+.home-room-card > .home-room-emoji {
+    position: absolute;
+    top: 18px;
+    left: 18px;
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    font-size: 21px;
+    filter: saturate(.9);
+}
+
 .home-room-card > span {
     position: relative;
     z-index: 1;
@@ -311,6 +340,14 @@
         width: 38px;
         height: 38px;
         font-size: 16px;
+    }
+
+    .home-room-card > .home-room-emoji {
+        top: 14px;
+        left: 14px;
+        width: 38px;
+        height: 38px;
+        font-size: 19px;
     }
 }
 

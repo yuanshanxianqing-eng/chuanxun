@@ -1,0 +1,77 @@
+/* 听歌页：播放器保持独立样式作用域，外层只负责嵌入与返回。 */
+#listening-page {
+    position: fixed;
+    inset: 0;
+    z-index: 2600;
+    display: none;
+    overflow: hidden;
+    background: #020409;
+    opacity: 0;
+    pointer-events: none;
+}
+
+#listening-page.active {
+    display: block;
+    opacity: 1;
+    pointer-events: auto;
+    animation: listeningPageIn .28s ease both;
+}
+
+#listening-player-frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #020409;
+}
+
+.listening-back-btn {
+    position: absolute;
+    z-index: 10;
+    top: max(16px, calc(env(safe-area-inset-top, 0px) + 10px));
+    left: 58px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 12px 0 10px;
+    border: 1px solid rgba(232, 237, 255, .13);
+    border-radius: 12px;
+    background: rgba(8, 12, 22, .38);
+    color: rgba(241, 244, 255, .78);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04), 0 8px 22px rgba(0, 0, 0, .12);
+    -webkit-backdrop-filter: blur(13px);
+    backdrop-filter: blur(13px);
+    font-family: var(--font-family, sans-serif);
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: transform .18s ease, background .18s ease, color .18s ease;
+}
+
+.listening-back-btn i {
+    font-size: 10px;
+}
+
+.listening-back-btn:active {
+    transform: scale(.95);
+    background: rgba(20, 27, 45, .58);
+    color: #fff;
+}
+
+@keyframes listeningPageIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 360px) {
+    .listening-back-btn {
+        left: 54px;
+        padding-right: 9px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #listening-page.active { animation: none; }
+}

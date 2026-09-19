@@ -548,20 +548,15 @@
     }
 
     function _cinemaLobbyHeroHTML(mode, title, subtitle) {
-        return '<section class="cinema-lobby-hero cinema-lobby-' + _escapeHtml(mode || 'idle') + '">' +
-            '<div class="cinema-curtain cinema-curtain-left"></div><div class="cinema-curtain cinema-curtain-right"></div>' +
-            '<div class="cinema-curtain-valance"></div><div class="cinema-stage-floor"></div>' +
-            '<div class="cinema-announcement"><i class="cinema-announcement-pin p1"></i><i class="cinema-announcement-pin p2"></i><span class="cinema-lobby-kicker">PRIVATE SCREENING NOTICE</span><h2>' + _escapeHtml(title || '两个人的放映厅') + '</h2><p>' + _escapeHtml(subtitle || '挑一部想看的电影，约定属于你们的开场时间。') + '</p><div class="cinema-announcement-lights"><i></i><i></i><i></i><i></i><i></i></div></div>' +
-        '</section>';
-    }
-    function _cinemaAudienceHTML() {
         var pName = (typeof settings !== 'undefined' && settings.partnerName) || '梦角';
         var mName = (typeof settings !== 'undefined' && settings.myName) || '我';
-        return '<div class="cinema-watching-audience" aria-label="共同观影成员">' +
-            '<div class="cinema-audience-person"><span>' + _avatarHTML(false, 38) + '</span><b>' + _escapeHtml(mName) + '</b></div>' +
-            '<div class="cinema-audience-line"><i></i><small>已开场 · 共同观影中</small><i></i></div>' +
-            '<div class="cinema-audience-person"><span>' + _avatarHTML(true, 38) + '</span><b>' + _escapeHtml(pName) + '</b></div>' +
-        '</div>';
+        return '<section class="cinema-lobby-hero cinema-lobby-' + _escapeHtml(mode || 'idle') + '">' +
+            '<div class="cinema-curtain cinema-curtain-left"></div><div class="cinema-curtain cinema-curtain-right"></div>' +
+            '<div class="cinema-projector-beam"></div><div class="cinema-film-reel cinema-reel-one"><i></i><i></i><i></i><i></i></div><div class="cinema-film-reel cinema-reel-two"><i></i><i></i><i></i><i></i></div>' +
+            '<div class="cinema-lobby-stars"><i>✦</i><i>✧</i><i>✦</i></div>' +
+            '<div class="cinema-lobby-screen"><span class="cinema-lobby-kicker">PRIVATE SCREENING ROOM</span><h2>' + _escapeHtml(title || '两个人的放映厅') + '</h2><p>' + _escapeHtml(subtitle || '挑一部想看的电影，约定属于你们的开场时间。') + '</p></div>' +
+            '<div class="cinema-lobby-couple"><div class="cinema-lobby-person"><span>' + _avatarHTML(false, 34) + '</span><b>' + _escapeHtml(mName) + '</b></div><div class="cinema-lobby-seat"><i class="fas fa-couch"></i><em></em><small>双人席</small></div><div class="cinema-lobby-person"><span>' + _avatarHTML(true, 34) + '</span><b>' + _escapeHtml(pName) + '</b></div></div>' +
+        '</section>';
     }
     function _cinemaLobbyToolsHTML() {
         return '<div class="cinema-lobby-tools">' +
@@ -764,8 +759,7 @@
         var panel = _getPanel();
         if (!panel) return;
         panel.innerHTML =
-            '<div class="cinema-loading-full cinema-curtain-opening">' +
-                '<div class="cinema-opening-panel cinema-opening-left"></div><div class="cinema-opening-panel cinema-opening-right"></div>' +
+            '<div class="cinema-loading-full">' +
                 '<div class="cinema-loading-icon"><i class="fas fa-film"></i></div>' +
                 '<div class="cinema-loading-bar-track">' +
                     '<div class="cinema-loading-bar-fill" id="cinema-loading-bar-fill"></div>' +
@@ -790,10 +784,7 @@
     function _avatarHTML(isPartner, size) {
         var s = size || 30;
         if (typeof _avEl === 'function') return _avEl(isPartner, s);
-        var name = isPartner
-            ? ((typeof settings !== 'undefined' && settings.partnerName) || '梦角')
-            : ((typeof settings !== 'undefined' && settings.myName) || '我');
-        return '<span class="cinema-avatar-initial" style="font-size:' + Math.round(s * 0.36) + 'px;">' + _escapeHtml(String(name).slice(0, 1)) + '</span>';
+        return '<span style="font-size:' + Math.round(s * 0.65) + 'px;">' + (isPartner ? '🌸' : '🙂') + '</span>';
     }
     // 头像要不要显示、显示成什么样，跟主聊天"外观设置→聊天头像"里那两个开关保持一致：
     // ① settings.inChatAvatarEnabled（显示聊天头像总开关）关了 → 'none'，完全不留头像位置
@@ -1162,7 +1153,7 @@
             // 不管这轮是梦角一开始就邀请的，还是你邀请梦角、梦角换了时间反弹回来的，
             // 只要是"梦角提议的时间在等你回应"，就用同一套三按钮面板，不用分场景
             bodyHtml =
-                _cinemaLobbyHeroHTML('invited', '待回应场次', '《' + _negoState.movieTitle + '》 · ' + _negoState.dateStr + ' ' + _negoState.timeStr) +
+                _cinemaLobbyHeroHTML('invited', '《' + _negoState.movieTitle + '》', partnerName + '送来了一张双人电影票') +
                 '<div class="cinema-invite-response-card">' +
                     '<div class="cinema-invite-response-label"><i class="fas fa-envelope-open-text"></i> 待回应的观影邀请</div>' +
                     '<div class="cinema-invite-response-time">' + _escapeHtml(_negoState.dateStr) + '  ' + _escapeHtml(_negoState.timeStr) + '</div>' +
@@ -1181,7 +1172,7 @@
                 ? '<button class="cinema-invite-btn" id="cinema-invite-btn" disabled>等待' + _escapeHtml(partnerName) + '回复中…</button>' +
                   '<button class="cinema-cancel-invite-btn" id="cinema-cancel-invite-btn">取消邀请</button>'
                 : '<button class="cinema-invite-btn" id="cinema-invite-btn">邀请' + _escapeHtml(partnerName) + '一起观影</button>';
-            bodyHtml = _cinemaLobbyHeroHTML(negoActive ? 'pending' : 'idle', negoActive ? '场次确认中' : '暂无场次', emptyText) +
+            bodyHtml = _cinemaLobbyHeroHTML(negoActive ? 'pending' : 'idle', negoActive ? '邀请正在穿过银幕' : '两个人的放映厅', emptyText) +
                 '<div class="cinema-lobby-ticket"><span><i class="fas fa-film"></i> TONIGHT CINEMA</span><b>' + (negoActive ? '等待回应' : '尚未选片') + '</b><small>' + (negoActive ? '对方回复后会自动更新约定状态' : '先发出邀请，再一起决定影片与时间') + '</small></div>' +
                 btnHtml + _cinemaLobbyToolsHTML();
         }
@@ -1213,7 +1204,7 @@
         panel.innerHTML =
             _hdHTML() +
             '<div class="cinema-body">' +
-                _cinemaLobbyHeroHTML(locked ? 'waiting' : 'ready', locked ? (_countdownText() || '等待开场') : '已经到达开场时间', '《' + _fakeAppt.movieTitle + '》 · ' + _fakeAppt.dateStr + ' ' + _fakeAppt.timeStr) +
+                _cinemaLobbyHeroHTML(locked ? 'waiting' : 'ready', '《' + _fakeAppt.movieTitle + '》', locked ? '电影票已经收好，等待约定时间开场' : '放映厅已经亮起，可以选片入场了') +
                 '<div class="cinema-appt-card">' +
                     '<div class="cinema-appt-badge">待观影</div>' +
                     '<div class="cinema-appt-movie">' + _escapeHtml(_fakeAppt.movieTitle) + '</div>' +
@@ -1308,7 +1299,6 @@
                     ) +
                 '</div>' +
             '</div>' +
-            _cinemaAudienceHTML() +
             '<div class="cinema-watch-toolbar">' +
                 '<button class="cinema-tool-btn" id="cinema-change-film-btn"><i class="fas fa-exchange-alt"></i> 换片</button>' +
                 '<span class="cinema-watch-title" id="cinema-watch-title">' + _escapeHtml(title) + '</span>' +
@@ -1885,6 +1875,7 @@
     // 页面已在打开/已打开时直接忽略，避免定时器和动画叠加导致卡顿/卡死
     var _entOpenTimers = [];
     var _entOpening = false;
+    var _entPreviousBodyOverflow = '';
     function _entClearOpenTimers() {
         for (var i = 0; i < _entOpenTimers.length; i++) clearTimeout(_entOpenTimers[i]);
         _entOpenTimers = [];
@@ -1902,7 +1893,10 @@
         if (sm && typeof hideModal === 'function') hideModal(sm);
         var ov = document.getElementById('ent-transition-overlay');
         function direct() {
+            _entPreviousBodyOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
             page.style.display = 'flex';
+            page.setAttribute('aria-hidden', 'false');
             requestAnimationFrame(function () {
                 requestAnimationFrame(function () {
                     page.classList.add('cs-open');
@@ -1934,6 +1928,8 @@
         if (panel) panel.style.visibility = '';
         _exitTheaterMode();
         page.classList.remove('cs-open');
+        page.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = _entPreviousBodyOverflow;
         if (typeof window.closeAllCsSheets === 'function') window.closeAllCsSheets();
         setTimeout(function () { page.style.display = 'none'; }, 380);
     };

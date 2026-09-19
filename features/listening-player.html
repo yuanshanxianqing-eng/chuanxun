@@ -1265,7 +1265,9 @@ button,input,select{font:inherit}
 <body>
 <div class="scene" id="scene">
   <audio id="audio" preload="metadata"></audio>
-  <header class="player-topbar" id="playerTopbar">
+  <button class="player-top-trigger" id="playerTopTrigger" type="button" aria-label="显示顶部控制栏"></button>
+  <header class="player-topbar" id="playerTopbar" aria-hidden="true">
+    <button class="player-back" id="playerBack" type="button" aria-label="返回邀约">‹</button>
     <button class="page-switch" id="pageSwitch" aria-label="切换播放页"><span class="switch-icon"></span></button>
     <div class="player-topbar-title">
       <b>一起听</b>
@@ -1558,6 +1560,9 @@ function ensureGoldfishPage(){
 }
 
 const pageSwitch=document.getElementById('pageSwitch');
+const playerTopTrigger=document.getElementById('playerTopTrigger');
+const playerTopbar=document.getElementById('playerTopbar');
+const playerBack=document.getElementById('playerBack');
 const vinylTitle=document.getElementById('vinylTitle');
 const vinylSub=document.getElementById('vinylSub');
 const vinylPlay=document.getElementById('vinylPlay');
@@ -1589,6 +1594,7 @@ let rhythmMode="idle"; // real | fallback | idle
 let playlistTracks=[];
 let activeTrackIndex=-1;
 let localObjectUrl=null;
+let sharedSessionActive=false;
 let lyricTimeline=[];
 let activeLyricIndex=-1;
 const canvas=document.getElementById('rainCanvas');
@@ -1615,6 +1621,27 @@ const pick=arr=>arr[Math.floor(Math.random()*arr.length)];
 
 
 let playerPage='rain';
+let topbarHideTimer=null;
+
+function revealPlayerTopbar(){
+  scene.classList.add('topbar-visible');
+  playerTopbar?.setAttribute('aria-hidden','false');
+  clearTimeout(topbarHideTimer);
+  topbarHideTimer=setTimeout(()=>{
+    if(document.getElementById('musicPanel')?.classList.contains('open'))return;
+    scene.classList.remove('topbar-visible');
+    playerTopbar?.setAttribute('aria-hidden','true');
+  },5200);
+}
+
+playerTopTrigger?.addEventListener('click',event=>{
+  event.stopPropagation();
+  revealPlayerTopbar();
+});
+playerTopbar?.addEventListener('pointerdown',()=>revealPlayerTopbar());
+playerBack?.addEventListener('click',()=>{
+  try{ window.parent.postMessage({type:'listening-close-request'},'*'); }catch(e){}
+});
 
 const PAGE_SWITCH_ICONS={
   rain:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5c1.4-4.1 4.1-6.2 8-6.2s6.6 2.1 8 6.2c-1.45-.9-2.75-.88-4 0-1.35-.92-2.68-.92-4 0-1.35-.92-2.68-.92-4 0-1.25-.88-2.55-.9-4 0Z"/><path d="M12 5.3v10.1c0 2.25-1.05 3.45-2.7 3.45-1 0-1.7-.55-1.95-1.45"/></svg>`,
@@ -1839,7 +1866,7 @@ function updateRhythmVisuals(){
 }
 requestAnimationFrame(updateRhythmVisuals);
 
-function setAudioSource(url,title='LYRIC RAIN'){
+function setAudioSource(url,title='LYRIC RAIN',shouldAutoplay=true){
   // 关键改动：先让原生 <audio> 正常播放，绝不再用 crossorigin + WebAudio 把网易云外链卡死。
   try{
     audio.pause();
@@ -1855,6 +1882,14 @@ function setAudioSource(url,title='LYRIC RAIN'){
   vinylTitle.textContent=title||'LYRIC RAIN';
   vinylSub.textContent=title&&title!=='LYRIC RAIN'?'正在播放 · '+title:'雨声里，听见一首歌慢慢转动';
   audioStatus.textContent='正在载入音乐…';
+
+  if(!shouldAutoplay){
+    playing=false;
+    playBtn.textContent='▶';
+    audioStatus.textContent='已载入，点击播放按钮开始';
+    syncVinylPlayState();
+    return;
+  }
 
   audio.play().then(()=>{
     playing=true;
@@ -2562,6 +2597,7 @@ musicCenterBack.onclick=()=>{
   musicPanel.classList.remove('open');
   musicPanel.setAttribute('aria-hidden','true');
   announceMusicCenter(false);
+  revealPlayerTopbar();
 };
 
 document.querySelectorAll('[data-music-tab]').forEach(button=>{
@@ -3178,6 +3214,7 @@ function renderPlaylist(){
     box.appendChild(btn);
   });
   syncMusicCenterNow(activeTrackIndex>=0?playlistTracks[activeTrackIndex]:null);
+  publishSharedPlaylist();
 }
 
 function syncMusicCenterNow(track){
@@ -3185,6 +3222,93 @@ function syncMusicCenterNow(track){
   const artist=document.getElementById('musicCenterNowArtist');
   if(title)title.textContent=track?.name||'LYRIC RAIN';
   if(artist)artist.textContent=track?.artists||'等待选择歌曲';
+}
+
+function floatingMusicApi(){
+  try{return window.parent?.FloatingMusicPlayer||null}catch(e){return null}
+}
+
+function exportSharedTracks(){
+  return playlistTracks.map(track=>({
+    title:track.name||'未命名歌曲',
+    sub:track.artists||'',
+    name:track.name||'未命名歌曲',
+    artists:track.artists||'',
+    url:track.url||'',
+    lrc:track.lrc||'',
+    picUrl:track.picUrl||track.cover||null,
+    isCustom:track.isCustom!==false
+  })).filter(track=>track.url);
+}
+
+function publishSharedPlaylist(){
+  if(!sharedSessionActive)return;
+  floatingMusicApi()?.replacePlaylist?.(exportSharedTracks());
+}
+
+function seekSharedTrack(seconds,shouldPlay){
+  const apply=()=>{
+    if(Number.isFinite(seconds)&&seconds>=0){
+      const max=Number.isFinite(audio.duration)?Math.max(0,audio.duration-.05):seconds;
+      try{audio.currentTime=Math.min(seconds,max)}catch(e){}
+    }
+    if(shouldPlay)audio.play().catch(()=>{});
+    else audio.pause();
+  };
+  if(audio.readyState>=1)apply();
+  else audio.addEventListener('loadedmetadata',apply,{once:true});
+}
+
+function beginSharedMusicSession(){
+  const api=floatingMusicApi();
+  if(!api)return false;
+  const state=api.beginListeningSession?.()||api.getState?.();
+  if(!state)return false;
+  sharedSessionActive=true;
+  if(Array.isArray(state.songs)){
+    playlistTracks=state.songs.map(track=>({
+      name:track.name||track.title||'未命名歌曲',
+      artists:track.artists||track.sub||'',
+      url:track.url||'',
+      lrc:track.lrc||'',
+      picUrl:track.picUrl||null,
+      isCustom:track.isCustom!==false
+    })).filter(track=>track.url);
+  }
+  activeTrackIndex=playlistTracks.length?Math.min(Math.max(Number(state.currentIndex)||0,0),playlistTracks.length-1):-1;
+  renderPlaylist();
+  const track=playlistTracks[activeTrackIndex];
+  if(track){
+    lyricTimeline=[];
+    activeLyricIndex=-1;
+    renderSecondaryLyrics();
+    setAudioSource(track.url,[track.name,track.artists].filter(Boolean).join(' · '),!!state.isPlaying);
+    maybeLoadTrackLrc(track);
+    seekSharedTrack(Number(state.currentTime)||0,!!state.isPlaying);
+  }else{
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+    lyricTimeline=[];
+    activeLyricIndex=-1;
+    renderSecondaryLyrics();
+    syncMusicCenterNow(null);
+  }
+  return true;
+}
+
+function endSharedMusicSession(){
+  const api=floatingMusicApi();
+  if(!api)return false;
+  api.acceptListeningState?.({
+    songs:exportSharedTracks(),
+    currentIndex:activeTrackIndex,
+    currentTime:Number.isFinite(audio.currentTime)?audio.currentTime:0,
+    isPlaying:!!audio.src&&!audio.paused&&!audio.ended
+  });
+  sharedSessionActive=false;
+  audio.pause();
+  return true;
 }
 
 document.getElementById('loadNeteaseBtn').addEventListener('click',async()=>{
@@ -3243,6 +3367,10 @@ document.getElementById('clearPlaylistBtn').addEventListener('click',()=>{
 });
 
 /* 初始 */
+window.ListeningPlayerBridge={
+  begin:beginSharedMusicSession,
+  end:endSharedMusicSession
+};
 scene.classList.add('is-paused');
 setPlayerPage('rain');
 enterMode('lyrics');

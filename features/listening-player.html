@@ -1260,11 +1260,22 @@ button,input,select{font:inherit}
 
 
 </style>
+<link rel="stylesheet" href="../css/player-v37.css">
 </head>
 <body>
 <div class="scene" id="scene">
   <audio id="audio" preload="metadata"></audio>
-  <button class="page-switch" id="pageSwitch" aria-label="切换播放页"><span class="switch-icon"></span></button>
+  <header class="player-topbar" id="playerTopbar">
+    <button class="page-switch" id="pageSwitch" aria-label="切换播放页"><span class="switch-icon"></span></button>
+    <div class="player-topbar-title">
+      <b>一起听</b>
+      <span id="playerViewName">歌词雨</span>
+    </div>
+    <div class="player-topbar-actions">
+      <button class="music-toggle" id="musicToggle" aria-label="打开音乐中心">♫</button>
+      <button class="scene-settings-toggle" id="sceneSettingsToggle" aria-label="当前页面设置">⚙</button>
+    </div>
+  </header>
   <div class="custom-bg" id="customBg"></div>
   <canvas id="rainCanvas"></canvas>
 
@@ -1306,6 +1317,11 @@ button,input,select{font:inherit}
       </div>
     </div>
 
+    <div class="vinyl-lyric-view" id="vinylLyricView" aria-hidden="true">
+      <div class="vinyl-lyric-caption">轻触歌词返回唱片</div>
+      <div class="vinyl-scroll-lyrics" id="vinylScrollLyrics"></div>
+    </div>
+
     <div class="vinyl-info">
       <div class="vinyl-title" id="vinylTitle">LYRIC RAIN</div>
       <div class="vinyl-sub" id="vinylSub">雨声里，听见一首歌慢慢转动</div>
@@ -1328,7 +1344,7 @@ button,input,select{font:inherit}
 
     <div class="vinyl-page-mark"><i></i><i></i></div>
 
-    <button class="vinyl-settings-toggle" id="vinylSettingsToggle" aria-label="唱片设置">⚙</button>
+    <button class="vinyl-settings-toggle" id="vinylSettingsToggle" aria-label="唱片设置" hidden>⚙</button>
     <div class="vinyl-settings-panel" id="vinylSettingsPanel">
       <div class="panel-title">唱片设置</div>
       <div class="setting">
@@ -1339,57 +1355,70 @@ button,input,select{font:inherit}
     </div>
   </section>
 
-  <button class="music-toggle" id="musicToggle" aria-label="音乐与歌单">♫</button>
-  <div class="music-panel" id="musicPanel">
-    <div class="panel-title">音乐 / 歌单</div>
-    <div class="audio-import">
-      <div class="local-file-row">
-        <div class="local-file-name" id="localFileName">未选择本地音乐</div>
-        <label class="local-file-btn" for="localAudioFile">本地上传</label>
-        <input type="file" id="localAudioFile" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac">
-      </div>
+  <div class="music-panel" id="musicPanel" aria-hidden="true">
+    <header class="music-center-header">
+      <button class="music-center-back" id="musicCenterBack" type="button" aria-label="返回播放器">‹</button>
+      <div><b>音乐中心</b><span>MY MUSIC</span></div>
+      <div class="music-center-headset">♫</div>
+    </header>
 
-      <div class="import-line">
-        <input type="text" id="audioUrl" placeholder="直接填写音频 URL（mp3 / m4a / ogg 等）">
-        <button id="loadUrlBtn">载入</button>
-      </div>
+    <section class="music-now-strip">
+      <div class="music-now-cover"><span>♪</span></div>
+      <div class="music-now-copy"><small>正在播放</small><b id="musicCenterNowTitle">LYRIC RAIN</b><span id="musicCenterNowArtist">等待选择歌曲</span></div>
+      <div class="music-now-wave"><i></i><i></i><i></i><i></i></div>
+    </section>
 
-      <div class="import-line">
-        <input type="text" id="neteaseInput" placeholder="网易云歌曲 / 歌单链接或 ID">
-        <button id="loadNeteaseBtn">导入</button>
-      </div>
+    <nav class="music-center-tabs" aria-label="音乐中心栏目">
+      <button class="active" type="button" data-music-tab="library"><span>♫</span>音乐库</button>
+      <button type="button" data-music-tab="import"><span>＋</span>导入</button>
+      <button type="button" data-music-tab="settings"><span>⚙</span>设置</button>
+    </nav>
 
-      <div class="import-line">
-        <input type="text" id="trackNameInput" placeholder="URL歌曲名称（可选）">
-        <button id="clearPlaylistBtn">清空</button>
-      </div>
+    <main class="music-center-main">
+      <section class="music-center-view active" data-music-view="library">
+        <div class="music-section-heading"><div><small>PLAYLIST</small><b>我的歌单</b></div><span id="musicLibraryCount">0 首</span></div>
+        <div class="rhythm-status music-rhythm-status">
+          <span class="rhythm-dot"></span>
+          <span id="audioStatus">等待载入音乐</span>
+        </div>
+        <div class="music-library-empty" id="musicLibraryEmpty"><span>♫</span><b>歌单还是空的</b><small>从“导入”添加本地音乐、链接或网易云歌单</small></div>
+        <div class="playlist-list" id="playlistList"></div>
+      </section>
 
-      <div class="rhythm-status">
-        <span class="rhythm-dot"></span>
-        <span id="audioStatus">等待载入音乐</span>
-      </div>
+      <section class="music-center-view" data-music-view="import">
+        <div class="music-section-heading"><div><small>ADD MUSIC</small><b>导入音乐</b></div></div>
+        <div class="music-import-list">
+          <div class="music-import-row">
+            <span class="music-import-icon">↥</span>
+            <div><b>本地音乐</b><small id="localFileName">未选择本地音乐</small></div>
+            <label class="music-import-action" for="localAudioFile">选择</label>
+            <input type="file" id="localAudioFile" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac">
+          </div>
+          <div class="music-import-block">
+            <div class="music-import-block-title"><span>⌁</span><div><b>音频链接</b><small>支持 mp3 / m4a / ogg 等直链</small></div></div>
+            <input type="text" id="trackNameInput" placeholder="歌曲名称（可选）">
+            <div class="music-import-input"><input type="text" id="audioUrl" placeholder="粘贴音频 URL"><button id="loadUrlBtn">载入</button></div>
+          </div>
+          <div class="music-import-block">
+            <div class="music-import-block-title"><span>云</span><div><b>网易云音乐</b><small>歌曲、歌单链接或数字 ID</small></div></div>
+            <div class="music-import-input"><input type="text" id="neteaseInput" placeholder="粘贴链接或 ID"><button id="loadNeteaseBtn">导入</button></div>
+          </div>
+        </div>
+      </section>
 
-      <div class="playlist-heading">当前歌单</div>
-      <div class="playlist-list" id="playlistList"></div>
-    </div>
-    <div class="small-note">
-      音乐导入和歌单统一放在这里。原本的本地音乐、URL、网易云导入和节奏联动逻辑保持不变。
-    </div>
+      <section class="music-center-view" data-music-view="settings">
+        <div class="music-section-heading"><div><small>PLAYBACK</small><b>播放设置</b></div></div>
+        <div class="music-setting-list">
+          <label class="music-setting-row"><div><b>歌词呈现</b><small>控制雨景页的显示方式</small></div><select id="displayMode"><option value="lyrics">有歌词</option><option value="nolyrics">无歌词</option><option value="instrumental">纯音乐</option></select></label>
+          <button class="music-danger-row" id="clearPlaylistBtn" type="button"><div><b>清空当前歌单</b><small>移除已导入的所有歌曲</small></div><span>清空</span></button>
+        </div>
+      </section>
+    </main>
   </div>
 
-  <button class="settings-toggle" id="settingsToggle" aria-label="雨景设置">⚙</button>
+  <button class="settings-toggle" id="settingsToggle" aria-label="雨景设置" hidden>⚙</button>
   <div class="settings-panel" id="settingsPanel">
     <div class="panel-title">雨景设置</div>
-
-    <div class="setting">
-      <label>演示模式</label>
-      <select id="displayMode">
-        <option value="lyrics">有歌词</option>
-        <option value="nolyrics">无歌词</option>
-        <option value="instrumental">纯音乐</option>
-      </select>
-      <div class="small-note">实际接音乐数据时，把这里的模式切换接到“是否存在歌词”判断即可。</div>
-    </div>
 
     <div class="setting">
       <label>无歌词残响来源</label>
@@ -1484,6 +1513,10 @@ button,input,select{font:inherit}
       id="goldfishMergedFrame"
       title="金鱼挂帘 · 天水颠倒播放器"
     ></iframe>
+    <div class="goldfish-host-lyrics" id="goldfishHostLyrics" aria-live="polite">
+      <div id="goldfishLyricCurrent"></div>
+      <div id="goldfishLyricNext"></div>
+    </div>
   </section>
 </div>
 
@@ -1535,6 +1568,12 @@ const vinylProgressFill=document.getElementById('vinylProgressFill');
 const vinylProgressDot=document.getElementById('vinylProgressDot');
 const vinylLabel=document.getElementById('vinylLabel');
 const vinylCoverImg=document.getElementById('vinylCoverImg');
+const vinylPage=document.getElementById('vinylPage');
+const vinylDisc=document.getElementById('vinylDisc');
+const vinylLyricView=document.getElementById('vinylLyricView');
+const vinylScrollLyrics=document.getElementById('vinylScrollLyrics');
+const goldfishLyricCurrent=document.getElementById('goldfishLyricCurrent');
+const goldfishLyricNext=document.getElementById('goldfishLyricNext');
 const audio=document.getElementById('audio');
 const root=document.documentElement;
 const audioStatus=document.getElementById('audioStatus');
@@ -1587,6 +1626,12 @@ function syncPageSwitchIcon(){
   if(icon)icon.innerHTML=PAGE_SWITCH_ICONS[playerPage]||PAGE_SWITCH_ICONS.rain;
 }
 
+function announceMusicCenter(open){
+  try{
+    window.parent.postMessage({type:'listening-music-center',open:Boolean(open)},'*');
+  }catch(e){}
+}
+
 function setPlayerPage(page){
   if(page!=='rain' && page!=='vinyl' && page!=='goldfish') page='rain';
   playerPage=page;
@@ -1595,10 +1640,14 @@ function setPlayerPage(page){
   scene.classList.remove('settings-visible');
   document.getElementById('settingsPanel')?.classList.remove('open');
   document.getElementById('musicPanel')?.classList.remove('open');
+  announceMusicCenter(false);
   document.getElementById('vinylSettingsPanel')?.classList.remove('open');
 
   scene.classList.toggle('vinyl-mode',playerPage==='vinyl');
   scene.classList.toggle('goldfish-mode',playerPage==='goldfish');
+
+  const viewName=document.getElementById('playerViewName');
+  if(viewName)viewName.textContent=playerPage==='rain'?'歌词雨':playerPage==='vinyl'?'黑胶唱片':'金鱼挂帘';
 
   if(playerPage==='goldfish'){
     ensureGoldfishPage();
@@ -1885,6 +1934,7 @@ function parseLRC(lrc){
 function setLyricsFromLRC(lrc){
   lyricTimeline=parseLRC(lrc);
   activeLyricIndex=-1;
+  renderSecondaryLyrics();
   if(lyricTimeline.length){
     displayMode.value='lyrics';
     enterMode('lyrics');
@@ -1893,7 +1943,7 @@ function setLyricsFromLRC(lrc){
 }
 
 function syncLyricsToAudio(){
-  if(!lyricTimeline.length||mode!=='lyrics')return;
+  if(!lyricTimeline.length)return;
   const t=audio.currentTime+.04;
   let idx=-1;
   for(let i=0;i<lyricTimeline.length;i++){
@@ -1907,14 +1957,51 @@ function syncLyricsToAudio(){
   const next=lyricTimeline[idx+1];
   const dur=Math.max(1.15,(next?next.time:cur.time+4.2)-cur.time);
 
+  syncSecondaryLyrics(idx);
+
   // 关键：按真实歌曲这一句的长度来安排退场时机。
-  renderTimedLyric(cur.text,dur);
+  if(mode==='lyrics')renderTimedLyric(cur.text,dur);
+}
+
+function renderSecondaryLyrics(){
+  if(!vinylScrollLyrics)return;
+  vinylScrollLyrics.innerHTML='';
+  lyricTimeline.forEach((item,index)=>{
+    const line=document.createElement('div');
+    line.className='vinyl-lyric-line';
+    line.dataset.lyricIndex=String(index);
+    line.textContent=item.text;
+    vinylScrollLyrics.appendChild(line);
+  });
+  if(!lyricTimeline.length){
+    const empty=document.createElement('div');
+    empty.className='vinyl-lyric-empty';
+    empty.textContent='暂无滚动歌词';
+    vinylScrollLyrics.appendChild(empty);
+    if(goldfishLyricCurrent)goldfishLyricCurrent.textContent='';
+    if(goldfishLyricNext)goldfishLyricNext.textContent='';
+    vinylScrollLyrics.style.transform='translateY(0)';
+  }
+}
+
+function syncSecondaryLyrics(index){
+  if(!lyricTimeline[index])return;
+  const lines=vinylScrollLyrics?.querySelectorAll('.vinyl-lyric-line')||[];
+  lines.forEach((line,i)=>line.classList.toggle('active',i===index));
+  const active=lines[index];
+  if(active&&vinylLyricView){
+    const target=vinylLyricView.clientHeight/2-(active.offsetTop+active.offsetHeight/2);
+    vinylScrollLyrics.style.transform=`translateY(${target}px)`;
+  }
+  if(goldfishLyricCurrent)goldfishLyricCurrent.textContent=lyricTimeline[index]?.text||'';
+  if(goldfishLyricNext)goldfishLyricNext.textContent=lyricTimeline[index+1]?.text||'';
 }
 
 function renderTimedLyric(text,duration){
   clearTimeout(sequenceTimer);
   clearTimeout(lyricFloatTimer);
   lyricLayer.innerHTML='';
+  text=sanitizeRainLyric(text);
   now.textContent=text;
   now.style.opacity=.55;
 
@@ -2124,6 +2211,9 @@ function splitToTwo(text){
   const mid=Math.ceil(arr.length/2);
   return [arr.slice(0,mid),arr.slice(mid)];
 }
+function sanitizeRainLyric(text){
+  return String(text||'').replace(/\p{P}/gu,'\u00a0');
+}
 function buildColumn(chars,side){
   const col=document.createElement('div');
   col.className='column '+side;
@@ -2160,6 +2250,7 @@ function buildColumn(chars,side){
 function renderLine(text){
   clearAmbientText();
   lyricLayer.innerHTML='';
+  text=sanitizeRainLyric(text);
   now.textContent=text;
   now.style.opacity=.55;
   const [a,b]=splitToTwo(text);
@@ -2432,10 +2523,16 @@ const musicToggle=document.getElementById('musicToggle');
 const musicPanel=document.getElementById('musicPanel');
 const vinylSettingsToggle=document.getElementById('vinylSettingsToggle');
 const vinylSettingsPanel=document.getElementById('vinylSettingsPanel');
+const sceneSettingsToggle=document.getElementById('sceneSettingsToggle');
+const musicCenterBack=document.getElementById('musicCenterBack');
 
 function closeOuterPanels(except=''){
   if(except!=='rain')settingsPanel.classList.remove('open');
-  if(except!=='music')musicPanel.classList.remove('open');
+  if(except!=='music'){
+    musicPanel.classList.remove('open');
+    musicPanel.setAttribute('aria-hidden','true');
+    announceMusicCenter(false);
+  }
   if(except!=='vinyl')vinylSettingsPanel.classList.remove('open');
 }
 
@@ -2446,10 +2543,13 @@ settingsToggle.onclick=()=>{
   if(open)settingsPanel.classList.add('open');
 };
 musicToggle.onclick=()=>{
-  revealSettingsButtons();
   const open=!musicPanel.classList.contains('open');
   closeOuterPanels();
-  if(open)musicPanel.classList.add('open');
+  if(open){
+    musicPanel.classList.add('open');
+    musicPanel.setAttribute('aria-hidden','false');
+    announceMusicCenter(true);
+  }
 };
 vinylSettingsToggle.onclick=()=>{
   revealSettingsButtons();
@@ -2457,6 +2557,48 @@ vinylSettingsToggle.onclick=()=>{
   closeOuterPanels();
   if(open)vinylSettingsPanel.classList.add('open');
 };
+
+musicCenterBack.onclick=()=>{
+  musicPanel.classList.remove('open');
+  musicPanel.setAttribute('aria-hidden','true');
+  announceMusicCenter(false);
+};
+
+document.querySelectorAll('[data-music-tab]').forEach(button=>{
+  button.addEventListener('click',()=>{
+    const tab=button.dataset.musicTab;
+    document.querySelectorAll('[data-music-tab]').forEach(item=>item.classList.toggle('active',item===button));
+    document.querySelectorAll('[data-music-view]').forEach(view=>view.classList.toggle('active',view.dataset.musicView===tab));
+  });
+});
+
+sceneSettingsToggle.onclick=()=>{
+  if(playerPage==='rain'){
+    settingsToggle.click();
+    return;
+  }
+  if(playerPage==='vinyl'){
+    vinylSettingsToggle.click();
+    return;
+  }
+  ensureGoldfishPage();
+  setTimeout(()=>{
+    try{
+      const inner=goldfishMergedFrame.contentDocument;
+      inner?.getElementById('editToggle')?.click();
+    }catch(e){}
+  },goldfishPageLoaded?0:180);
+};
+
+vinylDisc?.addEventListener('click',()=>{
+  vinylPage?.classList.add('lyrics-open');
+  vinylLyricView?.setAttribute('aria-hidden','false');
+  if(activeLyricIndex>=0)syncSecondaryLyrics(activeLyricIndex);
+});
+vinylLyricView?.addEventListener('click',()=>{
+  vinylPage?.classList.remove('lyrics-open');
+  vinylLyricView.setAttribute('aria-hidden','true');
+});
 
 function loadImageFile(input,cb){
   const file=input.files&&input.files[0];
@@ -2999,6 +3141,10 @@ async function playPlaylistTrack(index){
   activeTrackIndex=index;
   renderPlaylist();
 
+  lyricTimeline=[];
+  activeLyricIndex=-1;
+  renderSecondaryLyrics();
+
   const url=t.url || (t.id?'https://music.163.com/song/media/outer/url?id='+t.id+'.mp3':'');
   if(!url){
     audioStatus.textContent='这首歌没有可用播放地址';
@@ -3012,13 +3158,33 @@ async function playPlaylistTrack(index){
 function renderPlaylist(){
   const box=document.getElementById('playlistList');
   box.innerHTML='';
+  const count=document.getElementById('musicLibraryCount');
+  const empty=document.getElementById('musicLibraryEmpty');
+  if(count)count.textContent=playlistTracks.length+' 首';
+  if(empty)empty.hidden=playlistTracks.length>0;
   playlistTracks.forEach((t,i)=>{
     const btn=document.createElement('button');
     btn.className='playlist-item'+(i===activeTrackIndex?' active':'');
-    btn.innerHTML=`<span>${t.name||'未命名歌曲'}<br><small>${t.artists||''}</small></span><small>${i+1}</small>`;
+    const copy=document.createElement('span');
+    const name=document.createTextNode(t.name||'未命名歌曲');
+    const br=document.createElement('br');
+    const artist=document.createElement('small');
+    const order=document.createElement('small');
+    artist.textContent=t.artists||'';
+    order.textContent=String(i+1);
+    copy.append(name,br,artist);
+    btn.append(copy,order);
     btn.addEventListener('click',()=>playPlaylistTrack(i));
     box.appendChild(btn);
   });
+  syncMusicCenterNow(activeTrackIndex>=0?playlistTracks[activeTrackIndex]:null);
+}
+
+function syncMusicCenterNow(track){
+  const title=document.getElementById('musicCenterNowTitle');
+  const artist=document.getElementById('musicCenterNowArtist');
+  if(title)title.textContent=track?.name||'LYRIC RAIN';
+  if(artist)artist.textContent=track?.artists||'等待选择歌曲';
 }
 
 document.getElementById('loadNeteaseBtn').addEventListener('click',async()=>{
@@ -3043,6 +3209,9 @@ document.getElementById('loadNeteaseBtn').addEventListener('click',async()=>{
 document.getElementById('clearPlaylistBtn').addEventListener('click',()=>{
   playlistTracks=[];
   activeTrackIndex=-1;
+  lyricTimeline=[];
+  activeLyricIndex=-1;
+  renderSecondaryLyrics();
   renderPlaylist();
 
   if(localObjectUrl){

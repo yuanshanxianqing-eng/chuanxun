@@ -40,6 +40,35 @@
         }
     }
 
+    function syncMainTheme() {
+        if (!frame || !frame.contentDocument) return;
+        try {
+            var source = window.getComputedStyle(document.documentElement);
+            var target = frame.contentDocument.documentElement.style;
+            var variables = {
+                '--primary-bg': '--site-primary-bg',
+                '--secondary-bg': '--site-secondary-bg',
+                '--text-primary': '--site-text-primary',
+                '--text-secondary': '--site-text-secondary',
+                '--border-color': '--site-border-color',
+                '--accent-color': '--site-accent-color',
+                '--accent-color-rgb': '--site-accent-rgb'
+            };
+
+            Object.keys(variables).forEach(function (sourceName) {
+                var value = source.getPropertyValue(sourceName).trim();
+                if (value) target.setProperty(variables[sourceName], value);
+            });
+        } catch (error) {
+            console.warn('[listening] 主题同步失败', error);
+        }
+    }
+
+    function syncPlayerContext() {
+        syncMainAvatars();
+        syncMainTheme();
+    }
+
     function pausePlayer() {
         if (!frame || !frame.contentDocument) return;
         try {
@@ -57,13 +86,14 @@
         document.body.style.overflow = 'hidden';
         page.classList.add('active');
         page.setAttribute('aria-hidden', 'false');
-        requestAnimationFrame(syncMainAvatars);
+        requestAnimationFrame(syncPlayerContext);
     }
 
     function closeListening(options) {
         if (!page || !page.classList.contains('active')) return;
         pausePlayer();
         page.classList.remove('active');
+        page.classList.remove('music-center-open');
         page.setAttribute('aria-hidden', 'true');
         document.body.style.overflow = previousBodyOverflow;
         if (!options || options.reopenInvite !== false) {
@@ -80,7 +110,11 @@
 
         trigger.addEventListener('click', openListening);
         back.addEventListener('click', function () { closeListening({ reopenInvite: true }); });
-        frame.addEventListener('load', syncMainAvatars);
+        frame.addEventListener('load', syncPlayerContext);
+        window.addEventListener('message', function (event) {
+            if (!frame || event.source !== frame.contentWindow || !event.data || event.data.type !== 'listening-music-center') return;
+            page.classList.toggle('music-center-open', Boolean(event.data.open));
+        });
         document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape' && page.classList.contains('active')) {
                 event.preventDefault();

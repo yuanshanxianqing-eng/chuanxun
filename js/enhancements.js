@@ -177,7 +177,7 @@
     }
 
     function avatarHtml(isUser) {
-        const el = isUser ? document.getElementById('user-avatar') : document.getElementById('partner-avatar');
+        const el = isUser ? document.getElementById('my-avatar') : document.getElementById('partner-avatar');
         const img = el?.querySelector('img'); return img ? `<img src="${esc(img.src)}" alt="">` : '<i class="fas fa-user"></i>';
     }
     window.EnhancementUI = {

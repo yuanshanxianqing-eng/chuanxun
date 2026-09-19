@@ -21,6 +21,7 @@
 
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/hubs.css">
+    <link rel="stylesheet" href="css/listening.css">
     <link rel="stylesheet" href="css/companion.css">
     <link rel="stylesheet" href="css/enhancements.css">
     <link rel="stylesheet" href="css/companion-diary.css">
@@ -464,10 +465,6 @@
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:4px;"><path d="M22 13V19a2 2 0 01-2 2H4a2 2 0 01-2-2v-6"/><polyline points="15 3 21 3 21 9"/><line x1="21" y1="3" x2="10" y2="14"/></svg>收到的信
                     <span id="env-inbox-badge" class="env-badge" style="display:none;"></span>
                 </button>
-                <button class="env-tab-btn" id="env-tab-spacetime" onclick="switchEnvTab('spacetime')">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:4px;"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="M5 5l2 2M19 5l-2 2"/></svg>时空来信
-                    <span id="env-spacetime-badge" class="env-badge" style="display:none;"></span>
-                </button>
             </div>
 
             <div id="env-outbox-section">
@@ -476,10 +473,6 @@
 
             <div id="env-inbox-section" style="display:none;">
                 <div id="env-inbox-list"></div>
-            </div>
-
-            <div id="env-spacetime-section" style="display:none;">
-                <div id="env-spacetime-list"></div>
             </div>
 
             <div id="env-compose-form" style="display:none;">
@@ -703,19 +696,22 @@
             </div>
             <div class="settings-grid hub-card-grid">
                 <div class="settings-card hub-card" id="delivery-function">
-                    <i class="fas fa-motorcycle"></i><span>外卖</span><small class="hub-card-state ready">可使用</small>
+                    <i class="fas fa-motorcycle"></i><span>外卖</span>
                 </div>
                 <div class="settings-card hub-card" id="journey-function">
-                    <i class="fas fa-plane-departure"></i><span>旅程</span><small class="hub-card-state ready">可使用</small>
+                    <i class="fas fa-plane-departure"></i><span>旅程</span>
                 </div>
                 <div class="settings-card hub-card" id="bookshelf-function">
-                    <i class="fas fa-book"></i><span>书架</span><small class="hub-card-state ready">可使用</small>
+                    <i class="fas fa-book"></i><span>书架</span>
                 </div>
                 <div class="settings-card hub-card" id="cinema-function">
                     <i class="fas fa-film"></i><span>电影</span>
                 </div>
+                <div class="settings-card hub-card" id="listen-function">
+                    <i class="fas fa-headphones-simple"></i><span>听歌</span>
+                </div>
                 <div class="settings-card hub-card hub-placeholder" data-coming-soon="贴贴">
-                    <i class="fas fa-hands-holding-heart"></i><span>贴贴</span><small class="hub-card-state">筹备中</small>
+                    <span class="hub-emoji-icon" aria-hidden="true">💓</span><span>贴贴</span><small class="hub-card-state">筹备中</small>
                 </div>
             </div>
         </div>
@@ -760,7 +756,7 @@
                 <button class="home-room-card home-room-movie hub-placeholder" data-coming-soon="家庭电影"><i class="fas fa-film"></i><span>电影</span><small>客厅</small></button>
                 <button class="home-room-card home-room-pet hub-placeholder" data-coming-soon="一起养宠物"><i class="fas fa-paw"></i><span>宠物</span><small>小窝</small></button>
                 <button class="home-room-card home-room-sleep hub-placeholder" data-coming-soon="一起睡觉"><i class="fas fa-bed"></i><span>睡觉</span><small>卧室</small></button>
-                <button class="home-room-card home-room-touch hub-placeholder" data-coming-soon="贴贴"><i class="fas fa-hands-holding-heart"></i><span>贴贴</span><small>沙发</small></button>
+                <button class="home-room-card home-room-touch hub-placeholder" data-coming-soon="贴贴"><span class="home-room-emoji" aria-hidden="true">💓</span><span>贴贴</span><small>沙发</small></button>
                 <button class="home-room-card home-room-date hub-placeholder" data-coming-soon="心动邀约"><i class="fas fa-envelope-open-heart"></i><span>心动邀约</span><small>门廊</small></button>
             </div>
         </div>
@@ -2677,10 +2673,18 @@
 <script src="js/vendor/jszip.min.js"></script>
 <script src="js/bookshelf-enhanced.js"></script>
 
+<!-- 听歌沿用邀约入口；播放器作为独立内嵌页，避免改变主站框架与样式作用域。 -->
+<section id="listening-page" aria-hidden="true">
+    <iframe id="listening-player-frame" title="一起听歌" src="features/listening-player.html" allow="autoplay"></iframe>
+    <button class="listening-back-btn" id="listening-back-btn" type="button" aria-label="返回邀约">
+        <i class="fas fa-chevron-left"></i><span>邀约</span>
+    </button>
+</section>
+
 <!-- 电影院沿用现有“邀约”入口，在当前框架内打开，不跳转到空间页 -->
 <section id="entertainment-page" aria-hidden="true">
     <div class="cs-topbar" id="ent-topbar">
-        <button class="cs-icon-btn" type="button" onclick="closeEntertainment()"><i class="fas fa-chevron-left"></i></button>
+        <button class="cs-icon-btn cinema-page-back" type="button" onclick="closeEntertainment()" aria-label="返回邀约"><i class="fas fa-chevron-left"></i></button>
         <span class="cs-topbar-feed-title cinema-page-title"><span>电影院</span></span>
         <button class="cs-icon-btn" type="button" style="visibility:hidden"><i class="fas fa-film"></i></button>
     </div>
@@ -2704,6 +2708,7 @@
 <script src="js/distance.js"></script>
 <script src="js/cinema.js"></script>
 <script src="js/hubs.js"></script>
+<script src="js/listening.js"></script>
 <script src="js/companion.js"></script>
 <script src="js/cooking.js"></script>
 </body>

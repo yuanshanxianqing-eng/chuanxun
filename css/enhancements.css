@@ -39,3 +39,21 @@
   .input-area>.message-input{min-height:36px;padding:8px 12px}
   .input-area>.input-buttons{gap:6px}
 }
+
+/* 小屏边界保护：卡片保留装饰，但不再超出聊天可视宽度。 */
+.redpacket-message-wrap,
+.cinema-invite-msg-wrap,
+.question-batch-wrap { max-width: 100%; box-sizing: border-box; }
+.redpacket-message-wrap .message-content-wrapper,
+.cinema-invite-msg-wrap .message-content-wrapper,
+.question-batch-wrap .message-content-wrapper { min-width: 0; max-width: calc(100vw - var(--in-chat-avatar-size, 36px) - 46px); }
+.redpacket-message-wrap .redpacket-card { width: min(230px, 100%); max-width: 100%; box-sizing: border-box; }
+.cinema-invite-card { width: min(236px, 100%); max-width: 100%; box-sizing: border-box; }
+.question-batch-shell { width: min(248px, 100%); max-width: 100%; box-sizing: border-box; }
+.redpacket-open-inner { width: min(300px, calc(100vw - 28px)); }
+
+@media(max-width:360px){
+  .redpacket-card-main{padding:13px 12px;gap:9px}
+  .redpacket-card-main>i{font-size:25px}
+  .question-card{padding:11px 12px 10px}
+}
